@@ -1,26 +1,137 @@
 import { Injectable } from '@nestjs/common';
-import { CreateAnalyticsDto } from './dto/create-analytics.dto';
-import { UpdateAnalyticsDto } from './dto/update-analytics.dto';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import {
+  Appointment,
+  AppointmentDocument,
+} from '../appointments/entities/appointment.entity';
+import { Patient, PatientDocument } from '../patients/entities/patient.entity';
+import { Payment, PaymentDocument } from '../payments/entities/payment.entity';
 
 @Injectable()
 export class AnalyticsService {
-  create(createAnalyticsDto: CreateAnalyticsDto) {
-    return 'This action adds a new analytics';
+  constructor(
+    @InjectModel(Appointment.name)
+    private appointmentModel: Model<AppointmentDocument>,
+    @InjectModel(Patient.name) private patientModel: Model<PatientDocument>,
+    @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
+  ) {}
+
+  async getDashboardStats(hospitalId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [
+      totalAppointments,
+      todayAppointments,
+      totalPatients,
+      totalRevenue,
+      completedAppointments,
+      cancelledAppointments,
+      noShowAppointments,
+    ] = await Promise.all([
+      this.appointmentModel.countDocuments({ hospitalId }),
+      this.appointmentModel.countDocuments({
+        hospitalId,
+        date: { $gte: today },
+      }),
+      this.patientModel.countDocuments({}),
+      this.paymentModel.aggregate([
+        { $match: { status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      this.appointmentModel.countDocuments({ hospitalId, status: 'completed' }),
+      this.appointmentModel.countDocuments({ hospitalId, status: 'cancelled' }),
+      this.appointmentModel.countDocuments({ hospitalId, status: 'no_show' }),
+    ]);
+
+    return {
+      totalAppointments,
+      todayAppointments,
+      totalPatients,
+      totalRevenue: totalRevenue[0]?.total || 0,
+      completedAppointments,
+      cancelledAppointments,
+      noShowAppointments,
+      attendanceRate:
+        totalAppointments > 0
+          ? ((completedAppointments / totalAppointments) * 100).toFixed(2)
+          : 0,
+      noShowRate:
+        totalAppointments > 0
+          ? ((noShowAppointments / totalAppointments) * 100).toFixed(2)
+          : 0,
+      cancellationRate:
+        totalAppointments > 0
+          ? ((cancelledAppointments / totalAppointments) * 100).toFixed(2)
+          : 0,
+    };
   }
 
-  findAll() {
-    return `This action returns all analytics`;
+  async getAppointmentAnalytics(
+    hospitalId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const match: any = { hospitalId };
+    if (startDate && endDate) {
+      match.date = { $gte: startDate, $lte: endDate };
+    }
+
+    const appointmentsByStatus = await this.appointmentModel.aggregate([
+      { $match: match },
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]);
+
+    const appointmentsByDoctor = await this.appointmentModel.aggregate([
+      { $match: match },
+      { $group: { _id: '$doctorId', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ]);
+
+    return {
+      byStatus: appointmentsByStatus,
+      byDoctor: appointmentsByDoctor,
+    };
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} analytics`;
-  }
+  async getRevenueAnalytics(
+    hospitalId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const match: any = { status: 'completed' };
+    if (startDate && endDate) {
+      match.createdAt = { $gte: startDate, $lte: endDate };
+    }
 
-  update(id: number, updateAnalyticsDto: UpdateAnalyticsDto) {
-    return `This action updates a #${id} analytics`;
-  }
+    const revenueByDate = await this.paymentModel.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          revenue: { $sum: '$amount' },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
 
-  remove(id: number) {
-    return `This action removes a #${id} analytics`;
+    const revenueByMethod = await this.paymentModel.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$method',
+          revenue: { $sum: '$amount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    return {
+      byDate: revenueByDate,
+      byMethod: revenueByMethod,
+    };
   }
 }

@@ -1,26 +1,73 @@
-import { Injectable } from '@nestjs/common';
-import { CreateAttendanceDto } from './dto/create-attendance.dto';
-import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Attendance, AttendanceDocument } from './entities/attendance.entity';
 
 @Injectable()
 export class AttendanceService {
-  create(createAttendanceDto: CreateAttendanceDto) {
-    return 'This action adds a new attendance';
+  constructor(
+    @InjectModel(Attendance.name) private attendanceModel: Model<AttendanceDocument>,
+  ) {}
+
+  async checkIn(staffId: string, hospitalId: string, wifiSSID?: string, gpsCoordinates?: any) {
+    // Check if already checked in today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const existing = await this.attendanceModel.findOne({
+      staffId,
+      date: { $gte: today },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Already checked in today');
+    }
+
+    const attendance = await this.attendanceModel.create({
+      staffId,
+      hospitalId,
+      date: new Date(),
+      checkInTime: new Date(),
+      locationVerified: !!wifiSSID || !!gpsCoordinates,
+      wifiSSID,
+      gpsCoordinates,
+      status: 'present',
+    });
+
+    return attendance;
   }
 
-  findAll() {
-    return `This action returns all attendance`;
+  async checkOut(staffId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const attendance = await this.attendanceModel.findOne({
+      staffId,
+      date: { $gte: today },
+      checkOutTime: null,
+    });
+
+    if (!attendance) {
+      throw new BadRequestException('No check-in found for today');
+    }
+
+    const checkOutTime = new Date();
+    const workHours = (checkOutTime.getTime() - attendance.checkInTime.getTime()) / (1000 * 60 * 60);
+
+    attendance.checkOutTime = checkOutTime;
+    attendance.workHours = Math.round(workHours * 100) / 100;
+    await attendance.save();
+
+    return attendance;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} attendance`;
+  async getAttendanceHistory(staffId: string, limit = 30) {
+    return this.attendanceModel.find({ staffId }).sort({ date: -1 }).limit(limit).exec();
   }
 
-  update(id: number, updateAttendanceDto: UpdateAttendanceDto) {
-    return `This action updates a #${id} attendance`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} attendance`;
+  async getTodayAttendance(staffId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return this.attendanceModel.findOne({ staffId, date: { $gte: today } }).exec();
   }
 }

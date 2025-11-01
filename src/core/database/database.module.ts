@@ -1,13 +1,17 @@
 import { Module } from '@nestjs/common';
-// Import your database services here
-// Example: import { MongoService } from './mongo.service';
+import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigService } from '@nestjs/config';
 
 @Module({
-  providers: [
-    // Add database services here
-  ],
-  exports: [
-    // Export database services here
+  imports: [
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        uri: configService.get<string>('database.uri') || configService.get<string>('DATABASE_URL'),
+        retryAttempts: 3,
+        retryDelay: 1000,
+      }),
+    }),
   ],
 })
 export class DatabaseModule {}

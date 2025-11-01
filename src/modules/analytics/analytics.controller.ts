@@ -1,34 +1,40 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
-import { CreateAnalyticsDto } from './dto/create-analytics.dto';
-import { UpdateAnalyticsDto } from './dto/update-analytics.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
+@ApiTags('Analytics')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('analytics')
 export class AnalyticsController {
-  constructor(private readonly analyticsService: AnalyticsService) {}
+  constructor(private readonly service: AnalyticsService) {}
 
-  @Post()
-  create(@Body() createAnalyticsDto: CreateAnalyticsDto) {
-    return this.analyticsService.create(createAnalyticsDto);
+  @Get('dashboard/:hospitalId')
+  @Roles('super_admin', 'owner')
+  getDashboard(@Param('hospitalId') hospitalId: string) {
+    return this.service.getDashboardStats(hospitalId);
   }
 
-  @Get()
-  findAll() {
-    return this.analyticsService.findAll();
+  @Get('appointments/:hospitalId')
+  @Roles('super_admin', 'owner')
+  getAppointments(
+    @Param('hospitalId') hospitalId: string,
+    @Query('startDate') startDate?: Date,
+    @Query('endDate') endDate?: Date,
+  ) {
+    return this.service.getAppointmentAnalytics(hospitalId, startDate, endDate);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.analyticsService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateAnalyticsDto: UpdateAnalyticsDto) {
-    return this.analyticsService.update(+id, updateAnalyticsDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.analyticsService.remove(+id);
+  @Get('revenue/:hospitalId')
+  @Roles('super_admin', 'owner')
+  getRevenue(
+    @Param('hospitalId') hospitalId: string,
+    @Query('startDate') startDate?: Date,
+    @Query('endDate') endDate?: Date,
+  ) {
+    return this.service.getRevenueAnalytics(hospitalId, startDate, endDate);
   }
 }

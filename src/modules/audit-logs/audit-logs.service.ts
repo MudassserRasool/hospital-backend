@@ -1,26 +1,31 @@
 import { Injectable } from '@nestjs/common';
-import { CreateAuditLogDto } from './dto/create-audit-log.dto';
-import { UpdateAuditLogDto } from './dto/update-audit-log.dto';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { AuditLog, AuditLogDocument } from './entities/audit-log.entity';
 
 @Injectable()
 export class AuditLogsService {
-  create(createAuditLogDto: CreateAuditLogDto) {
-    return 'This action adds a new auditLog';
+  constructor(
+    @InjectModel(AuditLog.name) private auditLogModel: Model<AuditLogDocument>,
+  ) {}
+
+  async create(action: string, userId: string, metadata?: any, ipAddress?: string, userAgent?: string) {
+    const log = await this.auditLogModel.create({
+      action,
+      userId,
+      metadata,
+      ipAddress,
+      userAgent,
+    });
+    return log;
   }
 
-  findAll() {
-    return `This action returns all auditLogs`;
+  async findAll(filters?: any, limit = 100) {
+    const query = filters || {};
+    return this.auditLogModel.find(query).populate('userId', 'firstName lastName email role').sort({ createdAt: -1 }).limit(limit).exec();
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} auditLog`;
-  }
-
-  update(id: number, updateAuditLogDto: UpdateAuditLogDto) {
-    return `This action updates a #${id} auditLog`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} auditLog`;
+  async findByUser(userId: string, limit = 50) {
+    return this.auditLogModel.find({ userId }).populate('userId').sort({ createdAt: -1 }).limit(limit).exec();
   }
 }
