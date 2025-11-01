@@ -1,12 +1,12 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import compression from 'compression';
 import helmet from 'helmet';
+import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -16,10 +16,13 @@ async function bootstrap() {
   // Security
   app.use(helmet());
   app.use(compression());
-  
+
   // CORS
   app.enableCors({
-    origin: [process.env.FRONTEND_URL || 'http://localhost:3001', 'http://localhost:19006'],
+    origin: [
+      process.env.FRONTEND_URL || 'http://localhost:3001',
+      'http://localhost:19006',
+    ],
     credentials: true,
   });
 
@@ -48,7 +51,9 @@ async function bootstrap() {
   // Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('Hospital Management System API')
-    .setDescription('Comprehensive API for Hospital Appointment and Management System')
+    .setDescription(
+      'Comprehensive API for Hospital Appointment and Management System',
+    )
     .setVersion('1.0')
     .addBearerAuth(
       {
@@ -81,7 +86,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  
+
   console.log(`🚀 Application is running on: http://localhost:${port}/api`);
   console.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
 }

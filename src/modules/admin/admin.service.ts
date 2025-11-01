@@ -1,19 +1,36 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Hospital, HospitalDocument } from '../hospitals/entities/hospital.entity';
-import { User, UserDocument } from '../users/entities/user.entity';
-import { ReceiptTemplate, ReceiptTemplateDocument } from '../receipt-templates/entities/receipt-template.entity';
-import { Settings, SettingsDocument } from '../settings/entities/settings.entity';
-import { AuditLog, AuditLogDocument } from '../audit-logs/entities/audit-log.entity';
 import * as bcrypt from 'bcrypt';
+import { Model } from 'mongoose';
+import {
+  AuditLog,
+  AuditLogDocument,
+} from '../audit-logs/entities/audit-log.entity';
+import {
+  Hospital,
+  HospitalDocument,
+} from '../hospitals/entities/hospital.entity';
+import {
+  ReceiptTemplate,
+  ReceiptTemplateDocument,
+} from '../receipt-templates/entities/receipt-template.entity';
+import {
+  Settings,
+  SettingsDocument,
+} from '../settings/entities/settings.entity';
+import { User, UserDocument } from '../users/entities/user.entity';
 
 @Injectable()
 export class AdminService {
   constructor(
     @InjectModel(Hospital.name) private hospitalModel: Model<HospitalDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel(ReceiptTemplate.name) private receiptTemplateModel: Model<ReceiptTemplateDocument>,
+    @InjectModel(ReceiptTemplate.name)
+    private receiptTemplateModel: Model<ReceiptTemplateDocument>,
     @InjectModel(Settings.name) private settingsModel: Model<SettingsDocument>,
     @InjectModel(AuditLog.name) private auditLogModel: Model<AuditLogDocument>,
   ) {}
@@ -22,7 +39,7 @@ export class AdminService {
 
   async getHospitals(params?: any) {
     const query: any = {};
-    
+
     if (params?.search) {
       query.$or = [
         { name: { $regex: params.search, $options: 'i' } },
@@ -111,7 +128,7 @@ export class AdminService {
     const hospital = await this.hospitalModel.findByIdAndUpdate(
       id,
       { isActive: false },
-      { new: true }
+      { new: true },
     );
 
     if (!hospital) {
@@ -198,7 +215,8 @@ export class AdminService {
     return {
       owner: owner.toObject(),
       temporaryPassword: tempPassword,
-      message: 'Owner created successfully. Please share the temporary password securely.',
+      message:
+        'Owner created successfully. Please share the temporary password securely.',
     };
   }
 
@@ -263,7 +281,7 @@ export class AdminService {
         blockedAt: undefined,
         blockedBy: undefined,
       },
-      { new: true }
+      { new: true },
     );
 
     if (!owner) {
@@ -406,7 +424,11 @@ export class AdminService {
     return { logs, total };
   }
 
-  private async createAuditLog(data: { action: string; userId: string; details?: any }) {
+  private async createAuditLog(data: {
+    action: string;
+    userId: string;
+    details?: any;
+  }) {
     await this.auditLogModel.create({
       action: data.action,
       userId: data.userId,
@@ -417,10 +439,20 @@ export class AdminService {
   // ========== SYSTEM STATISTICS ==========
 
   async getSystemStats() {
-    const totalHospitals = await this.hospitalModel.countDocuments({ isActive: true });
-    const totalOwners = await this.userModel.countDocuments({ role: 'owner', isActive: true });
-    const totalDoctors = await this.userModel.countDocuments({ role: 'doctor', isActive: true });
-    const totalPatients = await this.userModel.countDocuments({ role: 'patient' });
+    const totalHospitals = await this.hospitalModel.countDocuments({
+      isActive: true,
+    });
+    const totalOwners = await this.userModel.countDocuments({
+      role: 'owner',
+      isActive: true,
+    });
+    const totalDoctors = await this.userModel.countDocuments({
+      role: 'doctor',
+      isActive: true,
+    });
+    const totalPatients = await this.userModel.countDocuments({
+      role: 'patient',
+    });
 
     return {
       hospitals: {
@@ -447,4 +479,3 @@ export class AdminService {
     return password;
   }
 }
-

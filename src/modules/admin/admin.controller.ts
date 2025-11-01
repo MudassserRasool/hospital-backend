@@ -1,5 +1,21 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -45,7 +61,10 @@ export class AdminController {
 
   @Delete('hospitals/:id')
   @ApiOperation({ summary: 'Deactivate hospital' })
-  @ApiResponse({ status: 200, description: 'Hospital deactivated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Hospital deactivated successfully',
+  })
   deactivateHospital(@Param('id') id: string) {
     return this.adminService.deactivateHospital(id);
   }
@@ -89,7 +108,11 @@ export class AdminController {
   @Patch('owners/:id/block')
   @ApiOperation({ summary: 'Block owner' })
   @ApiResponse({ status: 200, description: 'Owner blocked successfully' })
-  blockOwner(@Param('id') id: string, @Body('reason') reason: string, @CurrentUser() user: any) {
+  blockOwner(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @CurrentUser() user: any,
+  ) {
     return this.adminService.blockOwner(id, reason, user.id);
   }
 
@@ -147,7 +170,10 @@ export class AdminController {
   // Audit Logs
   @Get('audit-logs')
   @ApiOperation({ summary: 'Get audit logs' })
-  @ApiResponse({ status: 200, description: 'Audit logs retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Audit logs retrieved successfully',
+  })
   getAuditLogs(@Query() params: any) {
     return this.adminService.getAuditLogs(params);
   }
@@ -155,9 +181,11 @@ export class AdminController {
   // Statistics
   @Get('stats')
   @ApiOperation({ summary: 'Get system statistics' })
-  @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Statistics retrieved successfully',
+  })
   getSystemStats() {
     return this.adminService.getSystemStats();
   }
 }
-
