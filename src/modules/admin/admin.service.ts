@@ -407,7 +407,11 @@ export class AdminService {
   }
 
   private async createAuditLog(data: { action: string; userId: string; details?: any }) {
-    await this.auditLogModel.create(data);
+    await this.auditLogModel.create({
+      action: data.action,
+      userId: data.userId,
+      metadata: data.details,
+    });
   }
 
   // ========== SYSTEM STATISTICS ==========

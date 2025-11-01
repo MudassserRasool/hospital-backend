@@ -163,10 +163,10 @@ export class WalletsService {
 
     // Filter by date range
     if (options?.startDate) {
-      transactions = transactions.filter((t) => t.date >= options.startDate);
+      transactions = transactions.filter((t) => t.date >= options.startDate!);
     }
     if (options?.endDate) {
-      transactions = transactions.filter((t) => t.date <= options.endDate);
+      transactions = transactions.filter((t) => t.date <= options.endDate!);
     }
 
     // Sort by date descending (newest first)

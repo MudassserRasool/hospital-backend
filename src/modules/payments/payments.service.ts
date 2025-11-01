@@ -73,7 +73,7 @@ export class PaymentsService {
         walletAmountToUse,
         `Payment for appointment ${appointmentId}`,
         appointmentId,
-        payment._id.toString(),
+        (payment._id as any).toString(),
       );
     }
 
@@ -105,7 +105,7 @@ export class PaymentsService {
             walletAmountToUse,
             `Refund for failed payment ${transactionId}`,
             appointmentId,
-            payment._id.toString(),
+            (payment._id as any).toString(),
           );
         }
 
@@ -148,13 +148,13 @@ export class PaymentsService {
       payment.failureReason = easyPaisaData.message || 'Payment failed';
 
       // Refund wallet if it was used
-      if (payment.walletAmountUsed > 0) {
+      if (payment.walletAmountUsed && payment.walletAmountUsed > 0) {
         await this.walletsService.creditWallet(
           payment.patientId.toString(),
           payment.walletAmountUsed,
           `Refund for failed payment ${transactionId}`,
           payment.appointmentId.toString(),
-          payment._id.toString(),
+          (payment._id as any).toString(),
         );
       }
     }
@@ -177,12 +177,12 @@ export class PaymentsService {
       throw new NotFoundException('Payment not found');
     }
 
-    if (payment.status !== 'completed') {
-      throw new BadRequestException('Only completed payments can be refunded');
-    }
-
     if (payment.status === 'refunded' || payment.status === 'partially_refunded') {
       throw new BadRequestException('Payment already refunded');
+    }
+
+    if (payment.status !== 'completed') {
+      throw new BadRequestException('Only completed payments can be refunded');
     }
 
     const totalRefundAmount = payment.amount;
@@ -195,14 +195,14 @@ export class PaymentsService {
       walletRefund,
       `Wallet credit (10%) from cancelled appointment`,
       payment.appointmentId.toString(),
-      payment._id.toString(),
+      (payment._id as any).toString(),
     );
 
     // Process EasyPaisa refund for 90%
-    if (easyPaisaRefund > 0 && payment.easyPaisaAmountPaid > 0) {
+    if (easyPaisaRefund > 0 && payment.easyPaisaAmountPaid && payment.easyPaisaAmountPaid > 0) {
       try {
         await this.processEasyPaisaRefund(
-          payment.easyPaisaTransactionId,
+          payment.easyPaisaTransactionId || '',
           easyPaisaRefund,
         );
       } catch (error) {
