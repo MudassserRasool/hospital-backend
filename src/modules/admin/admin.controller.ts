@@ -20,7 +20,15 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { CreateHospitalDto } from '../hospitals/dto/create-hospital.dto';
+import { UpdateHospitalDto } from '../hospitals/dto/update-hospital.dto';
+import { CreateReceiptTemplateDto } from '../receipt-templates/dto/create-receipt-template.dto';
+import { UpdateReceiptTemplateDto } from '../receipt-templates/dto/update-receipt-template.dto';
 import { AdminService } from './admin.service';
+import { BlockOwnerDto } from './dto/block-owner.dto';
+import { CreateOwnerDto } from './dto/create-owner.dto';
+import { UpdateOwnerDto } from './dto/update-owner.dto';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 @ApiTags('Super Admin')
 @ApiBearerAuth('JWT-auth')
@@ -41,7 +49,7 @@ export class AdminController {
   @Post('hospitals')
   @ApiOperation({ summary: 'Create new hospital' })
   @ApiResponse({ status: 201, description: 'Hospital created successfully' })
-  createHospital(@Body() data: any, @CurrentUser() user: any) {
+  createHospital(@Body() data: CreateHospitalDto, @CurrentUser() user: any) {
     return this.adminService.createHospital(data, user.id);
   }
 
@@ -55,7 +63,7 @@ export class AdminController {
   @Put('hospitals/:id')
   @ApiOperation({ summary: 'Update hospital' })
   @ApiResponse({ status: 200, description: 'Hospital updated successfully' })
-  updateHospital(@Param('id') id: string, @Body() data: any) {
+  updateHospital(@Param('id') id: string, @Body() data: UpdateHospitalDto) {
     return this.adminService.updateHospital(id, data);
   }
 
@@ -87,7 +95,7 @@ export class AdminController {
   @Post('owners')
   @ApiOperation({ summary: 'Create owner with credentials' })
   @ApiResponse({ status: 201, description: 'Owner created successfully' })
-  createOwner(@Body() data: any, @CurrentUser() user: any) {
+  createOwner(@Body() data: CreateOwnerDto, @CurrentUser() user: any) {
     return this.adminService.createOwner(data, user.id);
   }
 
@@ -101,7 +109,7 @@ export class AdminController {
   @Put('owners/:id')
   @ApiOperation({ summary: 'Update owner' })
   @ApiResponse({ status: 200, description: 'Owner updated successfully' })
-  updateOwner(@Param('id') id: string, @Body() data: any) {
+  updateOwner(@Param('id') id: string, @Body() data: UpdateOwnerDto) {
     return this.adminService.updateOwner(id, data);
   }
 
@@ -110,10 +118,10 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Owner blocked successfully' })
   blockOwner(
     @Param('id') id: string,
-    @Body('reason') reason: string,
+    @Body() blockOwnerDto: BlockOwnerDto,
     @CurrentUser() user: any,
   ) {
-    return this.adminService.blockOwner(id, reason, user.id);
+    return this.adminService.blockOwner(id, blockOwnerDto.reason, user.id);
   }
 
   @Patch('owners/:id/unblock')
@@ -141,14 +149,17 @@ export class AdminController {
   @Post('receipt-templates')
   @ApiOperation({ summary: 'Create receipt template' })
   @ApiResponse({ status: 201, description: 'Template created successfully' })
-  createReceiptTemplate(@Body() data: any) {
+  createReceiptTemplate(@Body() data: CreateReceiptTemplateDto) {
     return this.adminService.createReceiptTemplate(data);
   }
 
   @Put('receipt-templates/:id')
   @ApiOperation({ summary: 'Update receipt template' })
   @ApiResponse({ status: 200, description: 'Template updated successfully' })
-  updateReceiptTemplate(@Param('id') id: string, @Body() data: any) {
+  updateReceiptTemplate(
+    @Param('id') id: string,
+    @Body() data: UpdateReceiptTemplateDto,
+  ) {
     return this.adminService.updateReceiptTemplate(id, data);
   }
 
@@ -163,7 +174,7 @@ export class AdminController {
   @Put('settings')
   @ApiOperation({ summary: 'Update system settings' })
   @ApiResponse({ status: 200, description: 'Settings updated successfully' })
-  updateSettings(@Body() data: any) {
+  updateSettings(@Body() data: UpdateSettingsDto) {
     return this.adminService.updateSettings(data);
   }
 
