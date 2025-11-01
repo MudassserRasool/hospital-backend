@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { Appointment, AppointmentDocument } from './entities/appointment.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AppointmentsService {
@@ -11,35 +12,26 @@ export class AppointmentsService {
     @InjectModel(Appointment.name) private appointmentModel: Model<AppointmentDocument>,
   ) {}
 
+  /**
+   * Book a new appointment
+   * Status: pending (waiting for payment)
+   */
   async create(createAppointmentDto: CreateAppointmentDto) {
     // Generate unique appointment ID
-    const appointmentId = await this.generateAppointmentId();
+    const appointmentId = `APT-${Date.now()}-${uuidv4().substring(0, 8)}`;
 
-    // Check for doctor availability (basic check - can be enhanced)
-    const conflictingAppointment = await this.appointmentModel.findOne({
-      doctorId: createAppointmentDto.doctorId,
-      date: createAppointmentDto.date,
-      status: { $nin: ['cancelled', 'no_show'] },
-      $or: [
-        {
-          'timeSlot.start': {
-            $gte: createAppointmentDto.timeSlot.start,
-            $lt: createAppointmentDto.timeSlot.end,
-          },
-        },
-        {
-          'timeSlot.end': {
-            $gt: createAppointmentDto.timeSlot.start,
-            $lte: createAppointmentDto.timeSlot.end,
-          },
-        },
-      ],
-    });
+    // Check if time slot is available
+    const isAvailable = await this.checkTimeSlotAvailability(
+      createAppointmentDto.doctorId,
+      createAppointmentDto.timeSlot.start,
+      createAppointmentDto.timeSlot.end,
+    );
 
-    if (conflictingAppointment) {
-      throw new ConflictException('Doctor is not available at this time slot');
+    if (!isAvailable) {
+      throw new ConflictException('Time slot is not available');
     }
 
+    // Create appointment
     const appointment = await this.appointmentModel.create({
       ...createAppointmentDto,
       appointmentId,
@@ -48,38 +40,69 @@ export class AppointmentsService {
     });
 
     return appointment.populate([
-      { path: 'patientId', populate: { path: 'userId', select: 'firstName lastName email phone' } },
-      { path: 'doctorId', select: 'firstName lastName email phone' },
-      { path: 'hospitalId', select: 'name logo address' },
-      { path: 'departmentId', select: 'name' },
+      { path: 'patientId', select: 'userId' },
+      { path: 'doctorId', select: 'firstName lastName email' },
+      { path: 'hospitalId', select: 'name logo' },
     ]);
   }
 
-  async findAll(filters?: any) {
-    const query = filters || {};
+  /**
+   * Get all appointments with filters
+   * Filtered by role and user
+   */
+  async findAll(filters: any, userId: string, userRole: string) {
+    const query: any = {};
+
+    // Role-based filtering
+    if (userRole === 'patient') {
+      query.patientId = filters.patientId || userId;
+    } else if (userRole === 'doctor' || userRole === 'nurse') {
+      query.doctorId = userId;
+    } else if (userRole === 'receptionist' || userRole === 'owner') {
+      query.hospitalId = filters.hospitalId;
+    }
+
+    // Additional filters
+    if (filters.status) {
+      query.status = filters.status;
+    }
+    if (filters.date) {
+      const startOfDay = new Date(filters.date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(filters.date);
+      endOfDay.setHours(23, 59, 59, 999);
+      query.date = { $gte: startOfDay, $lte: endOfDay };
+    }
+    if (filters.doctorId) {
+      query.doctorId = filters.doctorId;
+    }
+
     const appointments = await this.appointmentModel
       .find(query)
       .populate([
-        { path: 'patientId', populate: { path: 'userId', select: 'firstName lastName email phone' } },
-        { path: 'doctorId', select: 'firstName lastName email phone' },
+        { path: 'patientId', select: 'userId' },
+        { path: 'doctorId', select: 'firstName lastName email profilePicture' },
         { path: 'hospitalId', select: 'name logo' },
         { path: 'departmentId', select: 'name' },
       ])
-      .sort({ date: -1 })
+      .sort({ date: -1, 'timeSlot.start': -1 })
       .exec();
+
     return appointments;
   }
 
+  /**
+   * Get appointment by ID
+   */
   async findOne(id: string) {
     const appointment = await this.appointmentModel
       .findById(id)
       .populate([
-        { path: 'patientId', populate: { path: 'userId', select: 'firstName lastName email phone profilePicture' } },
-        { path: 'doctorId', select: 'firstName lastName email phone profilePicture' },
-        { path: 'hospitalId', select: 'name logo address contact' },
-        { path: 'departmentId', select: 'name description' },
-        { path: 'vitals.recordedBy', select: 'firstName lastName role' },
-        { path: 'cancelledBy', select: 'firstName lastName role' },
+        { path: 'patientId' },
+        { path: 'doctorId', select: 'firstName lastName email profilePicture phone' },
+        { path: 'hospitalId' },
+        { path: 'departmentId' },
+        { path: 'vitals.recordedBy', select: 'firstName lastName' },
       ])
       .exec();
 
@@ -90,12 +113,15 @@ export class AppointmentsService {
     return appointment;
   }
 
+  /**
+   * Get appointment by appointment ID (string)
+   */
   async findByAppointmentId(appointmentId: string) {
     const appointment = await this.appointmentModel
       .findOne({ appointmentId })
       .populate([
-        { path: 'patientId', populate: { path: 'userId' } },
-        { path: 'doctorId' },
+        { path: 'patientId' },
+        { path: 'doctorId', select: 'firstName lastName email profilePicture' },
         { path: 'hospitalId' },
       ])
       .exec();
@@ -107,11 +133,14 @@ export class AppointmentsService {
     return appointment;
   }
 
+  /**
+   * Update appointment
+   */
   async update(id: string, updateAppointmentDto: UpdateAppointmentDto) {
     const appointment = await this.appointmentModel
       .findByIdAndUpdate(id, updateAppointmentDto, { new: true })
       .populate([
-        { path: 'patientId', populate: { path: 'userId' } },
+        { path: 'patientId' },
         { path: 'doctorId' },
         { path: 'hospitalId' },
       ])
@@ -124,135 +153,167 @@ export class AppointmentsService {
     return appointment;
   }
 
+  /**
+   * Confirm appointment (Reception)
+   * Status: pending → confirmed
+   */
   async confirmAppointment(id: string) {
-    const appointment = await this.appointmentModel.findById(id);
-
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
-    }
+    const appointment = await this.findOne(id);
 
     if (appointment.status !== 'pending') {
-      throw new BadRequestException('Only pending appointments can be confirmed');
+      throw new BadRequestException(`Cannot confirm appointment with status: ${appointment.status}`);
+    }
+
+    if (appointment.paymentStatus !== 'paid') {
+      throw new BadRequestException('Payment must be completed before confirmation');
     }
 
     appointment.status = 'confirmed';
     appointment.confirmedAt = new Date();
     await appointment.save();
 
-    return appointment.populate([
-      { path: 'patientId', populate: { path: 'userId' } },
-      { path: 'doctorId' },
-      { path: 'hospitalId' },
-    ]);
+    // TODO: Send notification to patient
+    // await this.notificationService.sendAppointmentConfirmed(appointment);
+
+    return appointment;
   }
 
-  async checkIn(id: string, userId: string) {
-    const appointment = await this.appointmentModel.findById(id);
-
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
-    }
+  /**
+   * Check-in patient (Reception)
+   * Status: confirmed → checked_in
+   */
+  async checkInPatient(id: string, vitals?: any) {
+    const appointment = await this.findOne(id);
 
     if (appointment.status !== 'confirmed') {
-      throw new BadRequestException('Only confirmed appointments can be checked in');
+      throw new BadRequestException(`Cannot check-in appointment with status: ${appointment.status}`);
     }
 
     appointment.status = 'checked_in';
     appointment.checkedInAt = new Date();
+
+    if (vitals) {
+      appointment.vitals = {
+        ...vitals,
+        recordedAt: new Date(),
+      };
+    }
+
     await appointment.save();
 
-    return appointment.populate([
-      { path: 'patientId', populate: { path: 'userId' } },
-      { path: 'doctorId' },
-      { path: 'hospitalId' },
-    ]);
+    return appointment;
   }
 
-  async recordVitals(id: string, vitals: any, recordedBy: string) {
-    const appointment = await this.appointmentModel.findById(id);
+  /**
+   * Complete appointment (Doctor)
+   * Status: checked_in → completed
+   */
+  async completeAppointment(
+    id: string,
+    completionData: {
+      checkupNotes?: string;
+      diagnosis?: string;
+      prescriptions?: any[];
+    },
+  ) {
+    const appointment = await this.findOne(id);
 
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
-    }
-
-    if (appointment.status !== 'checked_in') {
-      throw new BadRequestException('Patient must be checked in to record vitals');
-    }
-
-    appointment.vitals = {
-      ...vitals,
-      recordedBy,
-      recordedAt: new Date(),
-    };
-
-    appointment.status = 'in_progress';
-    await appointment.save();
-
-    return appointment.populate([
-      { path: 'patientId', populate: { path: 'userId' } },
-      { path: 'doctorId' },
-      { path: 'vitals.recordedBy', select: 'firstName lastName role' },
-    ]);
-  }
-
-  async completeAppointment(id: string, data: any) {
-    const appointment = await this.appointmentModel.findById(id);
-
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
-    }
-
-    if (!['checked_in', 'in_progress'].includes(appointment.status)) {
-      throw new BadRequestException('Invalid appointment status for completion');
+    if (appointment.status !== 'checked_in' && appointment.status !== 'in_progress') {
+      throw new BadRequestException(`Cannot complete appointment with status: ${appointment.status}`);
     }
 
     appointment.status = 'completed';
     appointment.completedAt = new Date();
-    
-    if (data.checkupNotes) appointment.checkupNotes = data.checkupNotes;
-    if (data.diagnosis) appointment.diagnosis = data.diagnosis;
-    if (data.prescriptions) appointment.prescriptions = data.prescriptions;
+    appointment.checkupNotes = completionData.checkupNotes;
+    appointment.diagnosis = completionData.diagnosis;
+    appointment.prescriptions = completionData.prescriptions;
 
     await appointment.save();
 
-    return appointment.populate([
-      { path: 'patientId', populate: { path: 'userId' } },
-      { path: 'doctorId' },
-      { path: 'hospitalId' },
-    ]);
+    // TODO: Send notification to patient
+    // await this.notificationService.sendAppointmentCompleted(appointment);
+
+    return appointment;
   }
 
-  async cancelAppointment(id: string, reason: string, cancelledBy: string) {
-    const appointment = await this.appointmentModel.findById(id);
+  /**
+   * Cancel appointment
+   * Status: any → cancelled
+   * Triggers refund if paid
+   */
+  async cancelAppointment(
+    id: string,
+    cancellationReason: string,
+    cancelledBy: string,
+  ) {
+    const appointment = await this.findOne(id);
 
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
-    }
-
-    if (['completed', 'cancelled', 'no_show'].includes(appointment.status)) {
-      throw new BadRequestException('Cannot cancel this appointment');
+    if (appointment.status === 'completed' || appointment.status === 'cancelled') {
+      throw new BadRequestException(`Cannot cancel appointment with status: ${appointment.status}`);
     }
 
     appointment.status = 'cancelled';
-    appointment.cancellationReason = reason;
+    appointment.cancellationReason = cancellationReason;
     appointment.cancelledBy = cancelledBy as any;
     appointment.cancelledAt = new Date();
 
     await appointment.save();
 
-    return appointment.populate([
-      { path: 'patientId', populate: { path: 'userId' } },
-      { path: 'doctorId' },
-      { path: 'cancelledBy', select: 'firstName lastName role' },
-    ]);
+    // TODO: If payment was made, process refund
+    // if (appointment.paymentStatus === 'paid') {
+    //   await this.paymentsService.processRefund(appointment.transactionId, cancellationReason, cancelledBy);
+    //   appointment.paymentStatus = 'refunded';
+    //   await appointment.save();
+    // }
+
+    // TODO: Send notification to patient
+    // await this.notificationService.sendAppointmentCancelled(appointment);
+
+    return appointment;
   }
 
-  async markNoShow(id: string) {
-    const appointment = await this.appointmentModel.findById(id);
+  /**
+   * Reschedule appointment
+   */
+  async rescheduleAppointment(
+    id: string,
+    newDate: Date,
+    newTimeSlot: { start: Date; end: Date },
+  ) {
+    const appointment = await this.findOne(id);
 
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
+    if (appointment.status === 'completed' || appointment.status === 'cancelled') {
+      throw new BadRequestException(`Cannot reschedule appointment with status: ${appointment.status}`);
     }
+
+    // Check if new time slot is available
+    const isAvailable = await this.checkTimeSlotAvailability(
+      appointment.doctorId.toString(),
+      newTimeSlot.start,
+      newTimeSlot.end,
+      id, // Exclude current appointment
+    );
+
+    if (!isAvailable) {
+      throw new ConflictException('New time slot is not available');
+    }
+
+    appointment.date = newDate;
+    appointment.timeSlot = newTimeSlot;
+    appointment.status = 'pending'; // Reset to pending for re-confirmation
+    await appointment.save();
+
+    // TODO: Send notification to patient
+    // await this.notificationService.sendAppointmentRescheduled(appointment);
+
+    return appointment;
+  }
+
+  /**
+   * Mark appointment as no-show
+   */
+  async markNoShow(id: string) {
+    const appointment = await this.findOne(id);
 
     if (appointment.status !== 'confirmed') {
       throw new BadRequestException('Only confirmed appointments can be marked as no-show');
@@ -261,101 +322,103 @@ export class AppointmentsService {
     appointment.status = 'no_show';
     await appointment.save();
 
-    return appointment.populate([
-      { path: 'patientId', populate: { path: 'userId' } },
-      { path: 'doctorId' },
-    ]);
+    return appointment;
   }
 
-  async rescheduleAppointment(id: string, newDate: Date, newTimeSlot: any) {
-    const appointment = await this.appointmentModel.findById(id);
+  /**
+   * Update payment status
+   */
+  async updatePaymentStatus(
+    id: string,
+    paymentStatus: string,
+    transactionId?: string,
+    walletCreditUsed?: number,
+  ) {
+    const appointment = await this.findOne(id);
 
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
+    appointment.paymentStatus = paymentStatus;
+    if (transactionId) {
+      appointment.transactionId = transactionId;
+    }
+    if (walletCreditUsed !== undefined) {
+      appointment.walletCreditUsed = walletCreditUsed;
     }
 
-    if (['completed', 'cancelled'].includes(appointment.status)) {
-      throw new BadRequestException('Cannot reschedule this appointment');
-    }
+    await appointment.save();
+    return appointment;
+  }
 
-    // Check for conflicts
-    const conflictingAppointment = await this.appointmentModel.findOne({
-      doctorId: appointment.doctorId,
-      date: newDate,
-      status: { $nin: ['cancelled', 'no_show'] },
-      _id: { $ne: appointment._id },
+  /**
+   * Check time slot availability
+   */
+  async checkTimeSlotAvailability(
+    doctorId: string,
+    startTime: Date,
+    endTime: Date,
+    excludeAppointmentId?: string,
+  ): Promise<boolean> {
+    const query: any = {
+      doctorId,
+      status: { $nin: ['cancelled', 'no_show', 'completed'] },
       $or: [
         {
-          'timeSlot.start': {
-            $gte: newTimeSlot.start,
-            $lt: newTimeSlot.end,
-          },
-        },
-        {
-          'timeSlot.end': {
-            $gt: newTimeSlot.start,
-            $lte: newTimeSlot.end,
-          },
+          'timeSlot.start': { $lt: endTime },
+          'timeSlot.end': { $gt: startTime },
         },
       ],
-    });
-
-    if (conflictingAppointment) {
-      throw new ConflictException('Doctor is not available at this time slot');
-    }
-
-    appointment.date = newDate;
-    appointment.timeSlot = newTimeSlot;
-    appointment.status = 'rescheduled';
-    await appointment.save();
-
-    return appointment.populate([
-      { path: 'patientId', populate: { path: 'userId' } },
-      { path: 'doctorId' },
-      { path: 'hospitalId' },
-    ]);
-  }
-
-  async getAppointmentsByPatient(patientId: string) {
-    return this.findAll({ patientId });
-  }
-
-  async getAppointmentsByDoctor(doctorId: string, date?: Date) {
-    const query: any = { doctorId };
-    if (date) {
-      query.date = date;
-    }
-    return this.findAll(query);
-  }
-
-  async getAppointmentsByHospital(hospitalId: string, filters?: any) {
-    return this.findAll({ hospitalId, ...filters });
-  }
-
-  async getUpcomingAppointments(userId: string, role: string) {
-    const query: any = {
-      status: { $in: ['pending', 'confirmed'] },
-      'timeSlot.start': { $gte: new Date() },
     };
 
-    if (role === 'patient') {
-      query.patientId = userId;
-    } else if (role === 'doctor') {
-      query.doctorId = userId;
+    if (excludeAppointmentId) {
+      query._id = { $ne: excludeAppointmentId };
     }
 
-    return this.findAll(query);
+    const conflictingAppointment = await this.appointmentModel.findOne(query);
+    return !conflictingAppointment;
   }
 
-  private async generateAppointmentId(): Promise<string> {
-    const prefix = 'APT';
-    const timestamp = Date.now().toString();
-    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    return `${prefix}${timestamp}${random}`;
+  /**
+   * Get doctor's schedule for a date
+   */
+  async getDoctorSchedule(doctorId: string, date: Date) {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const appointments = await this.appointmentModel
+      .find({
+        doctorId,
+        date: { $gte: startOfDay, $lte: endOfDay },
+        status: { $nin: ['cancelled', 'no_show'] },
+      })
+      .sort({ 'timeSlot.start': 1 })
+      .exec();
+
+    return appointments;
   }
 
+  /**
+   * Get patient's appointment history
+   */
+  async getPatientAppointments(patientId: string) {
+    const appointments = await this.appointmentModel
+      .find({ patientId })
+      .populate([
+        { path: 'doctorId', select: 'firstName lastName profilePicture' },
+        { path: 'hospitalId', select: 'name logo' },
+        { path: 'departmentId', select: 'name' },
+      ])
+      .sort({ date: -1 })
+      .exec();
+
+    return appointments;
+  }
+
+  /**
+   * Delete appointment (admin only)
+   */
   async remove(id: string) {
-    const appointment = await this.appointmentModel.findByIdAndDelete(id).exec();
+    const appointment = await this.appointmentModel.findByIdAndDelete(id);
 
     if (!appointment) {
       throw new NotFoundException('Appointment not found');

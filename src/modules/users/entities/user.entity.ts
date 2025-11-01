@@ -56,8 +56,8 @@ export class User {
   @Prop()
   lastLoginAt?: Date;
 
-  @Prop()
-  deviceToken?: string; // For push notifications
+  @Prop({ type: [String], default: [] })
+  deviceTokens?: string[]; // For push notifications (Expo push tokens)
 
   createdAt?: Date;
   updatedAt?: Date;

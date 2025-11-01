@@ -1,8 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Wallet, WalletDocument } from './entities/wallet.entity';
-import { CreateWalletDto } from './dto/create-wallet.dto';
 
 @Injectable()
 export class WalletsService {
@@ -10,14 +9,17 @@ export class WalletsService {
     @InjectModel(Wallet.name) private walletModel: Model<WalletDocument>,
   ) {}
 
-  async create(createWalletDto: CreateWalletDto) {
-    const existingWallet = await this.walletModel.findOne({ patientId: createWalletDto.patientId });
-    if (existingWallet) {
-      return existingWallet;
+  /**
+   * Create wallet for a patient (auto-created during patient registration)
+   */
+  async createWallet(patientId: string) {
+    const existing = await this.walletModel.findOne({ patientId });
+    if (existing) {
+      return existing;
     }
 
     const wallet = await this.walletModel.create({
-      ...createWalletDto,
+      patientId,
       balance: 0,
       transactions: [],
     });
@@ -25,24 +27,55 @@ export class WalletsService {
     return wallet;
   }
 
-  async findByPatientId(patientId: string) {
-    let wallet = await this.walletModel.findOne({ patientId }).populate('patientId').exec();
-    
+  /**
+   * Get wallet by patient ID
+   */
+  async getWalletByPatientId(patientId: string) {
+    const wallet = await this.walletModel
+      .findOne({ patientId })
+      .populate('patientId', 'userId')
+      .exec();
+
     if (!wallet) {
-      // Auto-create wallet if doesn't exist
-      wallet = await this.walletModel.create({
-        patientId,
-        balance: 0,
-        transactions: [],
-      });
+      // Auto-create wallet if not exists
+      return this.createWallet(patientId);
     }
 
     return wallet;
   }
 
-  async addCredit(patientId: string, amount: number, description: string, relatedAppointmentId?: string, relatedPaymentId?: string) {
-    const wallet = await this.findByPatientId(patientId);
+  /**
+   * Get wallet by wallet ID
+   */
+  async getWalletById(walletId: string) {
+    const wallet = await this.walletModel
+      .findById(walletId)
+      .populate('patientId', 'userId')
+      .exec();
 
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found');
+    }
+
+    return wallet;
+  }
+
+  /**
+   * Credit wallet (add money)
+   * Used for: refunds, promotional credits, rewards
+   */
+  async creditWallet(
+    patientId: string,
+    amount: number,
+    description: string,
+    relatedAppointmentId?: string,
+    relatedPaymentId?: string,
+  ) {
+    if (amount <= 0) {
+      throw new BadRequestException('Credit amount must be positive');
+    }
+
+    const wallet = await this.getWalletByPatientId(patientId);
     const balanceBefore = wallet.balance;
     const balanceAfter = balanceBefore + amount;
 
@@ -51,23 +84,39 @@ export class WalletsService {
       type: 'credit',
       amount,
       description,
-      relatedAppointmentId: relatedAppointmentId as any,
-      relatedPaymentId: relatedPaymentId as any,
+      relatedAppointmentId: relatedAppointmentId ? new Types.ObjectId(relatedAppointmentId) : undefined,
+      relatedPaymentId: relatedPaymentId ? new Types.ObjectId(relatedPaymentId) : undefined,
       balanceBefore,
       balanceAfter,
       date: new Date(),
-    });
+    } as any);
 
     await wallet.save();
 
     return wallet;
   }
 
-  async debit(patientId: string, amount: number, description: string, relatedAppointmentId?: string) {
-    const wallet = await this.findByPatientId(patientId);
+  /**
+   * Debit wallet (deduct money)
+   * Used for: payments using wallet credit
+   */
+  async debitWallet(
+    patientId: string,
+    amount: number,
+    description: string,
+    relatedAppointmentId?: string,
+    relatedPaymentId?: string,
+  ) {
+    if (amount <= 0) {
+      throw new BadRequestException('Debit amount must be positive');
+    }
+
+    const wallet = await this.getWalletByPatientId(patientId);
 
     if (wallet.balance < amount) {
-      throw new BadRequestException('Insufficient wallet balance');
+      throw new BadRequestException(
+        `Insufficient wallet balance. Available: ${wallet.balance}, Required: ${amount}`,
+      );
     }
 
     const balanceBefore = wallet.balance;
@@ -78,36 +127,76 @@ export class WalletsService {
       type: 'debit',
       amount,
       description,
-      relatedAppointmentId: relatedAppointmentId as any,
+      relatedAppointmentId: relatedAppointmentId ? new Types.ObjectId(relatedAppointmentId) : undefined,
+      relatedPaymentId: relatedPaymentId ? new Types.ObjectId(relatedPaymentId) : undefined,
       balanceBefore,
       balanceAfter,
       date: new Date(),
-    });
+    } as any);
 
     await wallet.save();
 
     return wallet;
   }
 
-  async getTransactions(patientId: string, limit: number = 50) {
-    const wallet = await this.findByPatientId(patientId);
-    
-    const transactions = wallet.transactions
-      .sort((a: any, b: any) => b.date.getTime() - a.date.getTime())
-      .slice(0, limit);
+  /**
+   * Get wallet transactions with pagination and filters
+   */
+  async getTransactions(
+    patientId: string,
+    options?: {
+      limit?: number;
+      skip?: number;
+      type?: 'credit' | 'debit';
+      startDate?: Date;
+      endDate?: Date;
+    },
+  ) {
+    const wallet = await this.getWalletByPatientId(patientId);
+
+    let transactions = wallet.transactions || [];
+
+    // Filter by type
+    if (options?.type) {
+      transactions = transactions.filter((t) => t.type === options.type);
+    }
+
+    // Filter by date range
+    if (options?.startDate) {
+      transactions = transactions.filter((t) => t.date >= options.startDate);
+    }
+    if (options?.endDate) {
+      transactions = transactions.filter((t) => t.date <= options.endDate);
+    }
+
+    // Sort by date descending (newest first)
+    transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    // Pagination
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 50;
+    const paginatedTransactions = transactions.slice(skip, skip + limit);
 
     return {
-      patientId,
+      transactions: paginatedTransactions,
+      total: transactions.length,
       balance: wallet.balance,
-      transactions,
     };
   }
 
-  async getBalance(patientId: string) {
-    const wallet = await this.findByPatientId(patientId);
-    return {
-      patientId,
-      balance: wallet.balance,
-    };
+  /**
+   * Get wallet balance
+   */
+  async getBalance(patientId: string): Promise<number> {
+    const wallet = await this.getWalletByPatientId(patientId);
+    return wallet.balance;
+  }
+
+  /**
+   * Check if patient has sufficient balance
+   */
+  async hasSufficientBalance(patientId: string, amount: number): Promise<boolean> {
+    const balance = await this.getBalance(patientId);
+    return balance >= amount;
   }
 }

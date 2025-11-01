@@ -23,6 +23,14 @@ export class PatientsController {
     return this.patientsService.create(createPatientDto);
   }
 
+  @Get('me')
+  @Roles('patient')
+  @ApiOperation({ summary: 'Get current patient profile' })
+  @ApiResponse({ status: 200, description: 'Patient profile retrieved successfully' })
+  getMyProfile(@CurrentUser() user: any) {
+    return this.patientsService.findByUserId(user.id);
+  }
+
   @Get()
   @Roles('super_admin', 'owner', 'receptionist')
   @ApiOperation({ summary: 'Get all patients' })

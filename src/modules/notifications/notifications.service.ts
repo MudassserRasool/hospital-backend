@@ -1,21 +1,143 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { NotificationService as ExpoNotificationService } from '../../integrations/notification/notification.service';
-import {
-  Notification,
-  NotificationDocument,
-} from './entities/notification.entity';
+import { Notification, NotificationDocument } from './entities/notification.entity';
+import { User, UserDocument } from '../users/entities/user.entity';
+import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 
 @Injectable()
 export class NotificationsService {
-  constructor(
-    @InjectModel(Notification.name)
-    private notificationModel: Model<NotificationDocument>,
-    private expoNotificationService: ExpoNotificationService,
-  ) {}
+  private expo: Expo;
 
-  async create(
+  constructor(
+    @InjectModel(Notification.name) private notificationModel: Model<NotificationDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+  ) {
+    this.expo = new Expo();
+  }
+
+  /**
+   * Register device token for push notifications
+   */
+  async registerDeviceToken(userId: string, deviceToken: string) {
+    // Validate Expo push token
+    if (!Expo.isExpoPushToken(deviceToken)) {
+      throw new Error('Invalid Expo push token');
+    }
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Add device token if not already present
+    if (!user.deviceTokens) {
+      user.deviceTokens = [];
+    }
+
+    if (!user.deviceTokens.includes(deviceToken)) {
+      user.deviceTokens.push(deviceToken);
+      await user.save();
+    }
+
+    return { message: 'Device token registered successfully' };
+  }
+
+  /**
+   * Unregister device token
+   */
+  async unregisterDeviceToken(userId: string, deviceToken: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.deviceTokens) {
+      user.deviceTokens = user.deviceTokens.filter((token) => token !== deviceToken);
+      await user.save();
+    }
+
+    return { message: 'Device token unregistered successfully' };
+  }
+
+  /**
+   * Send push notification to a user
+   */
+  async sendNotification(
+    userId: string,
+    title: string,
+    body: string,
+    type: string,
+    data?: any,
+    relatedAppointmentId?: string,
+    relatedPaymentId?: string,
+  ) {
+    // Get user's device tokens
+    const user = await this.userModel.findById(userId);
+    if (!user || !user.deviceTokens || user.deviceTokens.length === 0) {
+      // Save notification even if no device tokens
+      return this.createNotification(
+        userId,
+        title,
+        body,
+        type,
+        data,
+        relatedAppointmentId,
+        relatedPaymentId,
+      );
+    }
+
+    // Create notification record
+    const notification = await this.createNotification(
+      userId,
+      title,
+      body,
+      type,
+      data,
+      relatedAppointmentId,
+      relatedPaymentId,
+    );
+
+    // Send to all user's devices
+    const messages: ExpoPushMessage[] = user.deviceTokens
+      .filter((token) => Expo.isExpoPushToken(token))
+      .map((token) => ({
+        to: token,
+        sound: 'default',
+        title,
+        body,
+        data: data || {},
+      }));
+
+    if (messages.length > 0) {
+      try {
+        const chunks = this.expo.chunkPushNotifications(messages);
+        const tickets: ExpoPushTicket[] = [];
+
+        for (const chunk of chunks) {
+          const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
+          tickets.push(...ticketChunk);
+        }
+
+        // Update notification as sent
+        notification.isSent = true;
+        notification.sentAt = new Date();
+        await notification.save();
+
+        return notification;
+      } catch (error) {
+        console.error('Error sending push notification:', error);
+        return notification;
+      }
+    }
+
+    return notification;
+  }
+
+  /**
+   * Create notification record in database
+   */
+  private async createNotification(
     userId: string,
     title: string,
     body: string,
@@ -29,7 +151,7 @@ export class NotificationsService {
       title,
       body,
       type,
-      data,
+      data: data || {},
       relatedAppointmentId,
       relatedPaymentId,
       isRead: false,
@@ -39,55 +161,53 @@ export class NotificationsService {
     return notification;
   }
 
-  async sendPushNotification(
+  /**
+   * Get user notifications
+   */
+  async getUserNotifications(
     userId: string,
-    pushToken: string,
-    title: string,
-    body: string,
-    type: string,
-    data?: any,
+    options?: {
+      isRead?: boolean;
+      limit?: number;
+      skip?: number;
+    },
   ) {
-    // Create notification record
-    const notification = await this.create(userId, title, body, type, data);
-
-    // Send push notification
-    try {
-      const result = await this.expoNotificationService.sendPushNotification(
-        pushToken,
-        title,
-        body,
-        { ...data, notificationId: (notification._id as any).toString() },
-      );
-
-      notification.isSent = true;
-      notification.sentAt = new Date();
-      notification.pushToken = pushToken;
-      notification.expoTicketId = (result.tickets[0] as any)?.id;
-      await notification.save();
-
-      return notification;
-    } catch (error) {
-      return notification;
-    }
-  }
-
-  async findByUser(userId: string, unreadOnly: boolean = false) {
     const query: any = { userId };
-    if (unreadOnly) {
-      query.isRead = false;
+
+    if (options?.isRead !== undefined) {
+      query.isRead = options.isRead;
     }
 
     const notifications = await this.notificationModel
       .find(query)
       .sort({ createdAt: -1 })
-      .limit(50)
+      .limit(options?.limit || 50)
+      .skip(options?.skip || 0)
+      .populate('relatedAppointmentId')
+      .populate('relatedPaymentId')
       .exec();
 
-    return notifications;
+    const total = await this.notificationModel.countDocuments(query);
+    const unreadCount = await this.notificationModel.countDocuments({
+      userId,
+      isRead: false,
+    });
+
+    return {
+      notifications,
+      total,
+      unreadCount,
+    };
   }
 
-  async markAsRead(id: string) {
-    const notification = await this.notificationModel.findById(id);
+  /**
+   * Mark notification as read
+   */
+  async markAsRead(notificationId: string, userId: string) {
+    const notification = await this.notificationModel.findOne({
+      _id: notificationId,
+      userId,
+    });
 
     if (!notification) {
       throw new NotFoundException('Notification not found');
@@ -100,6 +220,9 @@ export class NotificationsService {
     return notification;
   }
 
+  /**
+   * Mark all notifications as read
+   */
   async markAllAsRead(userId: string) {
     await this.notificationModel.updateMany(
       { userId, isRead: false },
@@ -109,17 +232,100 @@ export class NotificationsService {
     return { message: 'All notifications marked as read' };
   }
 
-  async getUnreadCount(userId: string) {
-    const count = await this.notificationModel.countDocuments({
+  /**
+   * Delete notification
+   */
+  async deleteNotification(notificationId: string, userId: string) {
+    const notification = await this.notificationModel.findOneAndDelete({
+      _id: notificationId,
       userId,
-      isRead: false,
     });
 
-    return { unreadCount: count };
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    return { message: 'Notification deleted successfully' };
   }
 
-  async registerDeviceToken(userId: string, deviceToken: string) {
-    // This will be stored in the User model
-    return { message: 'Device token registered', userId, deviceToken };
+  /**
+   * Helper methods for specific notification types
+   */
+
+  async sendAppointmentConfirmed(appointmentId: string, userId: string, appointmentDetails: any) {
+    return this.sendNotification(
+      userId,
+      'Appointment Confirmed',
+      `Your appointment for ${appointmentDetails.date} has been confirmed.`,
+      'appointment_confirmed',
+      { appointmentId, ...appointmentDetails },
+      appointmentId,
+    );
+  }
+
+  async sendAppointmentReminder(appointmentId: string, userId: string, appointmentDetails: any) {
+    return this.sendNotification(
+      userId,
+      'Appointment Reminder',
+      `Reminder: You have an appointment tomorrow at ${appointmentDetails.time}.`,
+      'appointment_reminder',
+      { appointmentId, ...appointmentDetails },
+      appointmentId,
+    );
+  }
+
+  async sendAppointmentCancelled(appointmentId: string, userId: string, reason: string) {
+    return this.sendNotification(
+      userId,
+      'Appointment Cancelled',
+      `Your appointment has been cancelled. Reason: ${reason}`,
+      'appointment_cancelled',
+      { appointmentId, reason },
+      appointmentId,
+    );
+  }
+
+  async sendPaymentReceived(paymentId: string, userId: string, amount: number) {
+    return this.sendNotification(
+      userId,
+      'Payment Received',
+      `Payment of ${amount} received successfully.`,
+      'payment_received',
+      { paymentId, amount },
+      undefined,
+      paymentId,
+    );
+  }
+
+  async sendRefundProcessed(paymentId: string, userId: string, amount: number, walletCredit: number) {
+    return this.sendNotification(
+      userId,
+      'Refund Processed',
+      `Refund of ${amount} processed. ${walletCredit} added to your wallet.`,
+      'refund_processed',
+      { paymentId, amount, walletCredit },
+      undefined,
+      paymentId,
+    );
+  }
+
+  async sendLeaveApproved(leaveId: string, userId: string, leaveDates: string) {
+    return this.sendNotification(
+      userId,
+      'Leave Approved',
+      `Your leave request for ${leaveDates} has been approved.`,
+      'leave_approved',
+      { leaveId, leaveDates },
+    );
+  }
+
+  async sendLeaveRejected(leaveId: string, userId: string, reason: string) {
+    return this.sendNotification(
+      userId,
+      'Leave Rejected',
+      `Your leave request has been rejected. Reason: ${reason}`,
+      'leave_rejected',
+      { leaveId, reason },
+    );
   }
 }

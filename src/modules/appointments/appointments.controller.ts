@@ -16,61 +16,51 @@ export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
 
   @Post()
-  @Roles('patient', 'receptionist')
+  @Roles('patient')
   @ApiOperation({ summary: 'Book a new appointment' })
   @ApiResponse({ status: 201, description: 'Appointment booked successfully' })
-  @ApiResponse({ status: 409, description: 'Time slot conflict' })
-  create(@Body() createAppointmentDto: CreateAppointmentDto) {
+  @ApiResponse({ status: 409, description: 'Time slot not available' })
+  create(@Body() createAppointmentDto: CreateAppointmentDto, @CurrentUser() user: any) {
     return this.appointmentsService.create(createAppointmentDto);
   }
 
   @Get()
+  @Roles('patient', 'doctor', 'nurse', 'receptionist', 'owner', 'super_admin')
   @ApiOperation({ summary: 'Get all appointments (filtered by role)' })
   @ApiResponse({ status: 200, description: 'Appointments retrieved successfully' })
   findAll(@Query() filters: any, @CurrentUser() user: any) {
-    // Apply role-based filtering
-    if (user.role === 'patient') {
-      filters.patientId = user.id;
-    } else if (user.role === 'doctor') {
-      filters.doctorId = user.id;
-    } else if (user.role === 'receptionist' && user.hospitalId) {
-      filters.hospitalId = user.hospitalId;
-    }
-    return this.appointmentsService.findAll(filters);
+    return this.appointmentsService.findAll(filters, user.id, user.role);
   }
 
-  @Get('upcoming')
-  @ApiOperation({ summary: 'Get upcoming appointments' })
-  @ApiResponse({ status: 200, description: 'Upcoming appointments retrieved successfully' })
-  getUpcoming(@CurrentUser() user: any) {
-    return this.appointmentsService.getUpcomingAppointments(user.id, user.role);
-  }
-
-  @Get('patient/:patientId')
-  @Roles('patient', 'doctor', 'receptionist', 'owner')
-  @ApiOperation({ summary: 'Get appointments by patient' })
+  @Get('me')
+  @Roles('patient')
+  @ApiOperation({ summary: 'Get my appointments' })
   @ApiResponse({ status: 200, description: 'Appointments retrieved successfully' })
-  getByPatient(@Param('patientId') patientId: string) {
-    return this.appointmentsService.getAppointmentsByPatient(patientId);
+  getMyAppointments(@CurrentUser() user: any) {
+    return this.appointmentsService.getPatientAppointments(user.patientId);
   }
 
-  @Get('doctor/:doctorId')
-  @Roles('doctor', 'receptionist', 'owner')
-  @ApiOperation({ summary: 'Get appointments by doctor' })
-  @ApiResponse({ status: 200, description: 'Appointments retrieved successfully' })
-  getByDoctor(@Param('doctorId') doctorId: string, @Query('date') date?: Date) {
-    return this.appointmentsService.getAppointmentsByDoctor(doctorId, date);
+  @Get('doctor/:doctorId/schedule')
+  @Roles('patient', 'receptionist', 'owner', 'super_admin')
+  @ApiOperation({ summary: "Get doctor's schedule for a date" })
+  @ApiResponse({ status: 200, description: 'Schedule retrieved successfully' })
+  getDoctorSchedule(
+    @Param('doctorId') doctorId: string,
+    @Query('date') date: string,
+  ) {
+    return this.appointmentsService.getDoctorSchedule(doctorId, new Date(date));
   }
 
-  @Get('hospital/:hospitalId')
-  @Roles('receptionist', 'owner', 'super_admin')
-  @ApiOperation({ summary: 'Get appointments by hospital' })
-  @ApiResponse({ status: 200, description: 'Appointments retrieved successfully' })
-  getByHospital(@Param('hospitalId') hospitalId: string, @Query() filters: any) {
-    return this.appointmentsService.getAppointmentsByHospital(hospitalId, filters);
+  @Get('appointment/:appointmentId')
+  @Roles('patient', 'doctor', 'nurse', 'receptionist', 'owner', 'super_admin')
+  @ApiOperation({ summary: 'Get appointment by appointment ID' })
+  @ApiResponse({ status: 200, description: 'Appointment retrieved successfully' })
+  findByAppointmentId(@Param('appointmentId') appointmentId: string) {
+    return this.appointmentsService.findByAppointmentId(appointmentId);
   }
 
   @Get(':id')
+  @Roles('patient', 'doctor', 'nurse', 'receptionist', 'owner', 'super_admin')
   @ApiOperation({ summary: 'Get appointment details' })
   @ApiResponse({ status: 200, description: 'Appointment retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Appointment not found' })
@@ -79,7 +69,7 @@ export class AppointmentsController {
   }
 
   @Patch(':id')
-  @Roles('receptionist', 'doctor', 'owner')
+  @Roles('patient', 'receptionist', 'owner', 'super_admin')
   @ApiOperation({ summary: 'Update appointment' })
   @ApiResponse({ status: 200, description: 'Appointment updated successfully' })
   update(@Param('id') id: string, @Body() updateAppointmentDto: UpdateAppointmentDto) {
@@ -87,63 +77,94 @@ export class AppointmentsController {
   }
 
   @Patch(':id/confirm')
-  @Roles('receptionist', 'owner')
-  @ApiOperation({ summary: 'Confirm appointment' })
+  @Roles('receptionist', 'owner', 'super_admin')
+  @ApiOperation({ summary: 'Confirm appointment (reception)' })
   @ApiResponse({ status: 200, description: 'Appointment confirmed successfully' })
-  confirm(@Param('id') id: string) {
+  confirmAppointment(@Param('id') id: string) {
     return this.appointmentsService.confirmAppointment(id);
   }
 
   @Patch(':id/checkin')
-  @Roles('receptionist', 'nurse')
-  @ApiOperation({ summary: 'Check-in patient for appointment' })
+  @Roles('receptionist', 'nurse', 'owner', 'super_admin')
+  @ApiOperation({ summary: 'Check-in patient (reception)' })
   @ApiResponse({ status: 200, description: 'Patient checked in successfully' })
-  checkIn(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.appointmentsService.checkIn(id, user.id);
-  }
-
-  @Patch(':id/vitals')
-  @Roles('nurse', 'doctor', 'receptionist')
-  @ApiOperation({ summary: 'Record patient vitals' })
-  @ApiResponse({ status: 200, description: 'Vitals recorded successfully' })
-  recordVitals(@Param('id') id: string, @Body() vitals: any, @CurrentUser() user: any) {
-    return this.appointmentsService.recordVitals(id, vitals, user.id);
+  checkInPatient(
+    @Param('id') id: string,
+    @Body('vitals') vitals?: any,
+  ) {
+    return this.appointmentsService.checkInPatient(id, vitals);
   }
 
   @Patch(':id/complete')
-  @Roles('doctor')
-  @ApiOperation({ summary: 'Complete appointment with diagnosis and prescription' })
+  @Roles('doctor', 'owner', 'super_admin')
+  @ApiOperation({ summary: 'Complete appointment (doctor)' })
   @ApiResponse({ status: 200, description: 'Appointment completed successfully' })
-  complete(@Param('id') id: string, @Body() data: any) {
-    return this.appointmentsService.completeAppointment(id, data);
+  completeAppointment(
+    @Param('id') id: string,
+    @Body() completionData: {
+      checkupNotes?: string;
+      diagnosis?: string;
+      prescriptions?: any[];
+    },
+  ) {
+    return this.appointmentsService.completeAppointment(id, completionData);
   }
 
   @Patch(':id/cancel')
-  @Roles('patient', 'receptionist', 'doctor', 'owner')
+  @Roles('patient', 'receptionist', 'owner', 'super_admin')
   @ApiOperation({ summary: 'Cancel appointment' })
   @ApiResponse({ status: 200, description: 'Appointment cancelled successfully' })
-  cancel(@Param('id') id: string, @Body('reason') reason: string, @CurrentUser() user: any) {
+  cancelAppointment(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @CurrentUser() user: any,
+  ) {
     return this.appointmentsService.cancelAppointment(id, reason, user.id);
   }
 
+  @Post(':id/reschedule')
+  @Roles('patient', 'receptionist', 'owner', 'super_admin')
+  @ApiOperation({ summary: 'Reschedule appointment' })
+  @ApiResponse({ status: 200, description: 'Appointment rescheduled successfully' })
+  rescheduleAppointment(
+    @Param('id') id: string,
+    @Body('date') date: string,
+    @Body('timeSlot') timeSlot: { start: string; end: string },
+  ) {
+    return this.appointmentsService.rescheduleAppointment(
+      id,
+      new Date(date),
+      {
+        start: new Date(timeSlot.start),
+        end: new Date(timeSlot.end),
+      },
+    );
+  }
+
   @Patch(':id/no-show')
-  @Roles('receptionist', 'owner')
+  @Roles('receptionist', 'owner', 'super_admin')
   @ApiOperation({ summary: 'Mark appointment as no-show' })
   @ApiResponse({ status: 200, description: 'Appointment marked as no-show' })
   markNoShow(@Param('id') id: string) {
     return this.appointmentsService.markNoShow(id);
   }
 
-  @Post(':id/reschedule')
-  @Roles('patient', 'receptionist')
-  @ApiOperation({ summary: 'Reschedule appointment' })
-  @ApiResponse({ status: 200, description: 'Appointment rescheduled successfully' })
-  reschedule(
+  @Patch(':id/payment-status')
+  @Roles('receptionist', 'owner', 'super_admin')
+  @ApiOperation({ summary: 'Update payment status' })
+  @ApiResponse({ status: 200, description: 'Payment status updated' })
+  updatePaymentStatus(
     @Param('id') id: string,
-    @Body('newDate') newDate: Date,
-    @Body('newTimeSlot') newTimeSlot: any,
+    @Body('paymentStatus') paymentStatus: string,
+    @Body('transactionId') transactionId?: string,
+    @Body('walletCreditUsed') walletCreditUsed?: number,
   ) {
-    return this.appointmentsService.rescheduleAppointment(id, newDate, newTimeSlot);
+    return this.appointmentsService.updatePaymentStatus(
+      id,
+      paymentStatus,
+      transactionId,
+      walletCreditUsed,
+    );
   }
 
   @Delete(':id')

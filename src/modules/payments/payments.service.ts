@@ -2,115 +2,176 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Payment, PaymentDocument } from './entities/payment.entity';
-import { CreatePaymentDto, VerifyPaymentDto, RefundPaymentDto } from './dto/create-payment.dto';
-import { PaymentService as EasyPaisaService } from '../../integrations/payment/payment.service';
 import { WalletsService } from '../wallets/wallets.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
-    private easyPaisaService: EasyPaisaService,
     private walletsService: WalletsService,
   ) {}
 
-  async processPayment(createPaymentDto: CreatePaymentDto) {
+  /**
+   * Process payment for appointment
+   * Supports: EasyPaisa only, Wallet only, or Mixed payment
+   */
+  async processPayment(
+    appointmentId: string,
+    patientId: string,
+    totalAmount: number,
+    walletAmountToUse: number = 0,
+  ) {
+    // Validate amount
+    if (totalAmount <= 0) {
+      throw new BadRequestException('Payment amount must be positive');
+    }
+
     // Generate unique transaction ID
-    const transactionId = await this.generateTransactionId();
+    const transactionId = `TXN-${uuidv4()}`;
 
-    let easyPaisaResponse: any = null;
-    let walletDeduction: any = null;
+    // Check wallet balance if using wallet
+    if (walletAmountToUse > 0) {
+      const hasBalance = await this.walletsService.hasSufficientBalance(patientId, walletAmountToUse);
+      if (!hasBalance) {
+        throw new BadRequestException('Insufficient wallet balance');
+      }
 
-    // Handle wallet payment
-    if (createPaymentDto.method === 'wallet' || createPaymentDto.method === 'mixed') {
-      if (createPaymentDto.walletAmountUsed && createPaymentDto.walletAmountUsed > 0) {
-        try {
-          walletDeduction = await this.walletsService.debit(
-            createPaymentDto.patientId,
-            createPaymentDto.walletAmountUsed,
-            `Payment for appointment ${createPaymentDto.appointmentId}`,
-            createPaymentDto.appointmentId,
-          );
-        } catch (error) {
-          throw new BadRequestException('Failed to deduct from wallet: ' + error.message);
-        }
+      // Validate wallet amount doesn't exceed total
+      if (walletAmountToUse > totalAmount) {
+        throw new BadRequestException('Wallet amount cannot exceed total amount');
       }
     }
 
-    // Handle EasyPaisa payment
-    if (createPaymentDto.method === 'easypaisa' || createPaymentDto.method === 'mixed') {
-      const easyPaisaAmount = createPaymentDto.easyPaisaAmountPaid || createPaymentDto.amount;
-      
-      try {
-        easyPaisaResponse = await this.easyPaisaService.initiatePayment(
-          easyPaisaAmount,
-          transactionId,
-          `Appointment Payment - ${createPaymentDto.appointmentId}`,
-        );
-      } catch (error) {
-        // Rollback wallet deduction if EasyPaisa fails
-        if (walletDeduction && createPaymentDto.walletAmountUsed) {
-          await this.walletsService.addCredit(
-            createPaymentDto.patientId,
-            createPaymentDto.walletAmountUsed,
-            'Refund - Payment failed',
-            createPaymentDto.appointmentId,
-          );
-        }
-        throw new BadRequestException('Failed to process EasyPaisa payment');
-      }
+    const easyPaisaAmount = totalAmount - walletAmountToUse;
+    let paymentMethod: 'easypaisa' | 'wallet' | 'mixed';
+
+    if (walletAmountToUse === 0) {
+      paymentMethod = 'easypaisa';
+    } else if (walletAmountToUse === totalAmount) {
+      paymentMethod = 'wallet';
+    } else {
+      paymentMethod = 'mixed';
     }
 
     // Create payment record
     const payment = await this.paymentModel.create({
-      ...createPaymentDto,
+      appointmentId,
+      patientId,
+      amount: totalAmount,
+      method: paymentMethod,
+      status: 'pending',
       transactionId,
-      status: createPaymentDto.method === 'wallet' ? 'completed' : 'pending',
-      easyPaisaResponse,
-      easyPaisaTransactionId: (easyPaisaResponse as any)?.transactionId,
-      completedAt: createPaymentDto.method === 'wallet' ? new Date() : null,
+      walletAmountUsed: walletAmountToUse,
+      easyPaisaAmountPaid: easyPaisaAmount,
     });
 
-    return payment.populate([
-      { path: 'appointmentId', select: 'appointmentId date timeSlot' },
-      { path: 'patientId', populate: { path: 'userId', select: 'firstName lastName email' } },
-    ]);
+    // If using wallet, debit immediately
+    if (walletAmountToUse > 0) {
+      await this.walletsService.debitWallet(
+        patientId,
+        walletAmountToUse,
+        `Payment for appointment ${appointmentId}`,
+        appointmentId,
+        payment._id.toString(),
+      );
+    }
+
+    // Process EasyPaisa payment if needed
+    if (easyPaisaAmount > 0) {
+      try {
+        const easyPaisaResponse = await this.processEasyPaisaPayment(
+          transactionId,
+          easyPaisaAmount,
+          patientId,
+          appointmentId,
+        );
+
+        payment.easyPaisaTransactionId = easyPaisaResponse.transactionId;
+        payment.easyPaisaResponse = easyPaisaResponse;
+        payment.status = 'processing';
+        await payment.save();
+
+        return {
+          payment,
+          easyPaisaCheckoutUrl: easyPaisaResponse.checkoutUrl,
+          requiresEasyPaisaAction: true,
+        };
+      } catch (error) {
+        // If EasyPaisa fails, refund wallet if it was debited
+        if (walletAmountToUse > 0) {
+          await this.walletsService.creditWallet(
+            patientId,
+            walletAmountToUse,
+            `Refund for failed payment ${transactionId}`,
+            appointmentId,
+            payment._id.toString(),
+          );
+        }
+
+        payment.status = 'failed';
+        payment.failureReason = error.message;
+        await payment.save();
+
+        throw new BadRequestException('Payment processing failed: ' + error.message);
+      }
+    } else {
+      // Wallet-only payment - mark as completed immediately
+      payment.status = 'completed';
+      payment.completedAt = new Date();
+      await payment.save();
+
+      return {
+        payment,
+        requiresEasyPaisaAction: false,
+      };
+    }
   }
 
-  async verifyPayment(verifyPaymentDto: VerifyPaymentDto) {
-    const payment = await this.paymentModel.findOne({ transactionId: verifyPaymentDto.transactionId });
+  /**
+   * Verify payment status (callback from EasyPaisa)
+   */
+  async verifyPayment(transactionId: string, easyPaisaData: any) {
+    const payment = await this.paymentModel.findOne({ transactionId });
 
     if (!payment) {
       throw new NotFoundException('Payment not found');
     }
 
-    if (payment.status === 'completed') {
-      return payment;
-    }
+    // Mock verification - in production, verify with EasyPaisa API
+    if (easyPaisaData.status === 'success') {
+      payment.status = 'completed';
+      payment.completedAt = new Date();
+      payment.easyPaisaResponse = easyPaisaData;
+    } else {
+      payment.status = 'failed';
+      payment.failureReason = easyPaisaData.message || 'Payment failed';
 
-    // Verify with EasyPaisa
-    if (verifyPaymentDto.easyPaisaTransactionId) {
-      const verification = await this.easyPaisaService.verifyPayment(verifyPaymentDto.easyPaisaTransactionId);
-
-      if (verification.success && verification.status === 'completed') {
-        payment.status = 'completed';
-        payment.completedAt = new Date();
-        await payment.save();
-      } else {
-        payment.status = 'failed';
-        payment.failureReason = 'Payment verification failed';
-        await payment.save();
+      // Refund wallet if it was used
+      if (payment.walletAmountUsed > 0) {
+        await this.walletsService.creditWallet(
+          payment.patientId.toString(),
+          payment.walletAmountUsed,
+          `Refund for failed payment ${transactionId}`,
+          payment.appointmentId.toString(),
+          payment._id.toString(),
+        );
       }
     }
 
-    return payment.populate([
-      { path: 'appointmentId' },
-      { path: 'patientId', populate: { path: 'userId' } },
-    ]);
+    await payment.save();
+    return payment;
   }
 
-  async refundPayment(refundPaymentDto: RefundPaymentDto, refundedBy: string) {
-    const payment = await this.paymentModel.findById(refundPaymentDto.paymentId);
+  /**
+   * Process refund (90% EasyPaisa + 10% Wallet credit)
+   */
+  async processRefund(
+    paymentId: string,
+    reason: string,
+    refundedBy: string,
+  ) {
+    const payment = await this.paymentModel.findById(paymentId);
 
     if (!payment) {
       throw new NotFoundException('Payment not found');
@@ -120,62 +181,57 @@ export class PaymentsService {
       throw new BadRequestException('Only completed payments can be refunded');
     }
 
-    const refundAmount = refundPaymentDto.amount || payment.amount;
+    if (payment.status === 'refunded' || payment.status === 'partially_refunded') {
+      throw new BadRequestException('Payment already refunded');
+    }
 
-    // Calculate refund split: 90% to EasyPaisa, 10% to wallet
-    const walletRefund = Math.round(refundAmount * 0.1 * 100) / 100;
-    const easyPaisaRefund = Math.round(refundAmount * 0.9 * 100) / 100;
+    const totalRefundAmount = payment.amount;
+    const walletRefund = Math.round(totalRefundAmount * 0.1); // 10% to wallet
+    const easyPaisaRefund = totalRefundAmount - walletRefund; // 90% to EasyPaisa
 
-    // Process EasyPaisa refund
-    if (payment.easyPaisaAmountPaid && payment.easyPaisaAmountPaid > 0) {
+    // Credit 10% to wallet
+    await this.walletsService.creditWallet(
+      payment.patientId.toString(),
+      walletRefund,
+      `Wallet credit (10%) from cancelled appointment`,
+      payment.appointmentId.toString(),
+      payment._id.toString(),
+    );
+
+    // Process EasyPaisa refund for 90%
+    if (easyPaisaRefund > 0 && payment.easyPaisaAmountPaid > 0) {
       try {
-        await this.easyPaisaService.processRefund(
-          payment.easyPaisaTransactionId || payment.transactionId,
+        await this.processEasyPaisaRefund(
+          payment.easyPaisaTransactionId,
           easyPaisaRefund,
-          refundPaymentDto.reason,
         );
       } catch (error) {
-        throw new BadRequestException('Failed to process EasyPaisa refund');
+        // Log error but don't fail - manual intervention may be needed
+        console.error('EasyPaisa refund failed:', error);
       }
     }
 
-    // Add credit to wallet
-    if (walletRefund > 0) {
-      await this.walletsService.addCredit(
-        payment.patientId.toString(),
-        walletRefund,
-        `Refund credit for appointment cancellation - ${refundPaymentDto.reason}`,
-        payment.appointmentId.toString(),
-        (payment._id as any).toString(),
-      );
-    }
-
-    // Update payment record
-    payment.status = refundAmount === payment.amount ? 'refunded' : 'partially_refunded';
-    payment.refundAmount = refundAmount;
-    payment.refundReason = refundPaymentDto.reason;
-    payment.refundedAt = new Date();
-    payment.refundedBy = refundedBy as any;
+    payment.status = 'refunded';
+    payment.refundAmount = totalRefundAmount;
     payment.walletRefundAmount = walletRefund;
     payment.easyPaisaRefundAmount = easyPaisaRefund;
+    payment.refundReason = reason;
+    payment.refundedAt = new Date();
+    payment.refundedBy = refundedBy as any;
 
     await payment.save();
 
-    return payment.populate([
-      { path: 'appointmentId' },
-      { path: 'patientId', populate: { path: 'userId' } },
-      { path: 'refundedBy', select: 'firstName lastName role' },
-    ]);
+    return payment;
   }
 
-  async findOne(id: string) {
+  /**
+   * Get payment by ID
+   */
+  async getPaymentById(paymentId: string) {
     const payment = await this.paymentModel
-      .findById(id)
-      .populate([
-        { path: 'appointmentId' },
-        { path: 'patientId', populate: { path: 'userId' } },
-        { path: 'refundedBy', select: 'firstName lastName role' },
-      ])
+      .findById(paymentId)
+      .populate('appointmentId')
+      .populate('patientId')
       .exec();
 
     if (!payment) {
@@ -185,13 +241,14 @@ export class PaymentsService {
     return payment;
   }
 
-  async findByTransactionId(transactionId: string) {
+  /**
+   * Get payment by transaction ID
+   */
+  async getPaymentByTransactionId(transactionId: string) {
     const payment = await this.paymentModel
       .findOne({ transactionId })
-      .populate([
-        { path: 'appointmentId' },
-        { path: 'patientId', populate: { path: 'userId' } },
-      ])
+      .populate('appointmentId')
+      .populate('patientId')
       .exec();
 
     if (!payment) {
@@ -201,32 +258,75 @@ export class PaymentsService {
     return payment;
   }
 
-  async findByAppointment(appointmentId: string) {
-    const payments = await this.paymentModel
-      .find({ appointmentId })
-      .populate([
-        { path: 'appointmentId' },
-        { path: 'patientId', populate: { path: 'userId' } },
-      ])
-      .exec();
+  /**
+   * Get payment history for a patient
+   */
+  async getPatientPaymentHistory(
+    patientId: string,
+    options?: {
+      limit?: number;
+      skip?: number;
+      status?: string;
+    },
+  ) {
+    const query: any = { patientId };
 
-    return payments;
-  }
+    if (options?.status) {
+      query.status = options.status;
+    }
 
-  async findByPatient(patientId: string) {
     const payments = await this.paymentModel
-      .find({ patientId })
+      .find(query)
       .populate('appointmentId')
       .sort({ createdAt: -1 })
+      .limit(options?.limit || 50)
+      .skip(options?.skip || 0)
       .exec();
 
-    return payments;
+    const total = await this.paymentModel.countDocuments(query);
+
+    return {
+      payments,
+      total,
+    };
   }
 
-  private async generateTransactionId(): Promise<string> {
-    const prefix = 'TXN';
-    const timestamp = Date.now().toString();
-    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    return `${prefix}${timestamp}${random}`;
+  /**
+   * Mock EasyPaisa payment processing
+   * In production, integrate with actual EasyPaisa API
+   */
+  private async processEasyPaisaPayment(
+    transactionId: string,
+    amount: number,
+    patientId: string,
+    appointmentId: string,
+  ): Promise<any> {
+    // Mock implementation - replace with actual EasyPaisa integration
+    return {
+      success: true,
+      transactionId: `EP-${uuidv4()}`,
+      checkoutUrl: `https://easypaisa.com/checkout?txn=${transactionId}&amount=${amount}`,
+      status: 'pending',
+      message: 'Payment initiated. Please complete payment on EasyPaisa.',
+    };
+  }
+
+  /**
+   * Mock EasyPaisa refund processing
+   * In production, integrate with actual EasyPaisa API
+   */
+  private async processEasyPaisaRefund(
+    easyPaisaTransactionId: string,
+    amount: number,
+  ): Promise<any> {
+    // Mock implementation - replace with actual EasyPaisa refund API
+    return {
+      success: true,
+      refundTransactionId: `REF-${uuidv4()}`,
+      amount,
+      status: 'processing',
+      message: 'Refund initiated. Will be processed within 3-5 business days.',
+    };
   }
 }
+
