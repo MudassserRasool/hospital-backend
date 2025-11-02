@@ -42,7 +42,6 @@ export class HospitalsController {
   @ApiOperation({ summary: 'Get all hospitals' })
   @ApiResponse({ status: 200, description: 'Hospitals retrieved successfully' })
   findAll(@Query() filters: any) {
-    console.log(filters);
     return this.hospitalsService.findAll(filters);
   }
 

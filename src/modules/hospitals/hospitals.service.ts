@@ -36,7 +36,33 @@ export class HospitalsService {
   }
 
   async findAll(filters?: any) {
-    const query = {};
+    const query: any = {};
+
+    // Extract search parameter if provided
+    if (filters?.search && filters.search.trim() !== '') {
+      const searchTerm = filters.search.trim();
+      query.$or = [
+        { name: { $regex: searchTerm, $options: 'i' } },
+        { 'address.city': { $regex: searchTerm, $options: 'i' } },
+        { 'address.state': { $regex: searchTerm, $options: 'i' } },
+        { 'address.street': { $regex: searchTerm, $options: 'i' } },
+        { 'contact.email': { $regex: searchTerm, $options: 'i' } },
+        { 'contact.phone': { $regex: searchTerm, $options: 'i' } },
+        { specialties: { $in: [new RegExp(searchTerm, 'i')] } },
+      ];
+    }
+
+    // Handle other filter parameters (excluding 'search')
+    Object.keys(filters || {}).forEach((key) => {
+      if (
+        key !== 'search' &&
+        filters[key] !== undefined &&
+        filters[key] !== ''
+      ) {
+        query[key] = filters[key];
+      }
+    });
+
     const hospitals = await this.hospitalModel
       .find(query)
       .populate('ownerId', 'firstName lastName email')
