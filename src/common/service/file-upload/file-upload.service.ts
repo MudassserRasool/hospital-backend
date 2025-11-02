@@ -1,9 +1,9 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { existsSync, mkdirSync } from 'fs';
+import * as fs from 'fs/promises';
 import { extname, join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs/promises';
 
 export interface FileUploadResult {
   filename: string;
@@ -34,12 +34,10 @@ export class FileUploadService {
 
   constructor(private configService: ConfigService) {
     // Get upload path from environment or use default
-    this.uploadPath =
-      process.env.UPLOAD_PATH || join(process.cwd(), 'uploads');
+    this.uploadPath = process.env.UPLOAD_PATH || join(process.cwd(), 'uploads');
 
     // Get max file size (default: 5MB)
-    this.maxFileSize =
-      parseInt(process.env.MAX_FILE_SIZE || '5242880', 10);
+    this.maxFileSize = parseInt(process.env.MAX_FILE_SIZE || '5242880', 10);
 
     // Allowed file types
     this.allowedMimeTypes = [
@@ -84,10 +82,7 @@ export class FileUploadService {
     if (mimetype.startsWith('image/')) {
       return 'images';
     }
-    if (
-      mimetype.startsWith('application/') ||
-      mimetype.startsWith('text/')
-    ) {
+    if (mimetype.startsWith('application/') || mimetype.startsWith('text/')) {
       return 'documents';
     }
     return 'other';
@@ -133,9 +128,7 @@ export class FileUploadService {
     try {
       await fs.writeFile(destinationPath, file.buffer);
     } catch (error) {
-      throw new BadRequestException(
-        `Failed to save file: ${error.message}`,
-      );
+      throw new BadRequestException(`Failed to save file: ${error.message}`);
     }
 
     // Generate URL
@@ -218,4 +211,3 @@ export class FileUploadService {
     return `${baseUrl}/${apiPrefix}/files/${category}/${filename}`;
   }
 }
-
