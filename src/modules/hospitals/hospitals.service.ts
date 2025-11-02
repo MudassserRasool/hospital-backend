@@ -1,9 +1,13 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Hospital, HospitalDocument } from './entities/hospital.entity';
 import { CreateHospitalDto } from './dto/create-hospital.dto';
 import { UpdateHospitalDto } from './dto/update-hospital.dto';
+import { Hospital, HospitalDocument } from './entities/hospital.entity';
 
 @Injectable()
 export class HospitalsService {
@@ -32,7 +36,7 @@ export class HospitalsService {
   }
 
   async findAll(filters?: any) {
-    const query = filters || {};
+    const query = {};
     const hospitals = await this.hospitalModel
       .find(query)
       .populate('ownerId', 'firstName lastName email')
@@ -75,11 +79,9 @@ export class HospitalsService {
   }
 
   async deactivate(id: string) {
-    const hospital = await this.hospitalModel.findByIdAndUpdate(
-      id,
-      { isActive: false },
-      { new: true },
-    ).exec();
+    const hospital = await this.hospitalModel
+      .findByIdAndUpdate(id, { isActive: false }, { new: true })
+      .exec();
 
     if (!hospital) {
       throw new NotFoundException('Hospital not found');
@@ -148,7 +150,11 @@ export class HospitalsService {
     return hospitals;
   }
 
-  async getNearbyHospitals(latitude: number, longitude: number, maxDistance: number = 10000) {
+  async getNearbyHospitals(
+    latitude: number,
+    longitude: number,
+    maxDistance: number = 10000,
+  ) {
     // Find hospitals within maxDistance (in meters)
     const hospitals = await this.hospitalModel
       .find({

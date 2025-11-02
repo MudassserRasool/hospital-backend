@@ -1,11 +1,26 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { HospitalsService } from './hospitals.service';
-import { CreateHospitalDto } from './dto/create-hospital.dto';
-import { UpdateHospitalDto } from './dto/update-hospital.dto';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { CreateHospitalDto } from './dto/create-hospital.dto';
+import { UpdateHospitalDto } from './dto/update-hospital.dto';
+import { HospitalsService } from './hospitals.service';
 
 @ApiTags('Hospitals')
 @ApiBearerAuth('JWT-auth')
@@ -27,25 +42,36 @@ export class HospitalsController {
   @ApiOperation({ summary: 'Get all hospitals' })
   @ApiResponse({ status: 200, description: 'Hospitals retrieved successfully' })
   findAll(@Query() filters: any) {
+    console.log(filters);
     return this.hospitalsService.findAll(filters);
   }
 
   @Get('search')
   @ApiOperation({ summary: 'Search hospitals by name, city, specialty' })
-  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Search results retrieved successfully',
+  })
   search(@Query('q') searchTerm: string) {
     return this.hospitalsService.searchHospitals(searchTerm);
   }
 
   @Get('nearby')
   @ApiOperation({ summary: 'Find nearby hospitals' })
-  @ApiResponse({ status: 200, description: 'Nearby hospitals retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nearby hospitals retrieved successfully',
+  })
   getNearby(
     @Query('latitude') latitude: number,
     @Query('longitude') longitude: number,
     @Query('maxDistance') maxDistance?: number,
   ) {
-    return this.hospitalsService.getNearbyHospitals(latitude, longitude, maxDistance);
+    return this.hospitalsService.getNearbyHospitals(
+      latitude,
+      longitude,
+      maxDistance,
+    );
   }
 
   @Get('owner/:ownerId')
@@ -85,14 +111,20 @@ export class HospitalsController {
   @ApiOperation({ summary: 'Update hospital' })
   @ApiResponse({ status: 200, description: 'Hospital updated successfully' })
   @ApiResponse({ status: 404, description: 'Hospital not found' })
-  update(@Param('id') id: string, @Body() updateHospitalDto: UpdateHospitalDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateHospitalDto: UpdateHospitalDto,
+  ) {
     return this.hospitalsService.update(id, updateHospitalDto);
   }
 
   @Delete(':id/deactivate')
   @Roles('super_admin')
   @ApiOperation({ summary: 'Deactivate hospital' })
-  @ApiResponse({ status: 200, description: 'Hospital deactivated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Hospital deactivated successfully',
+  })
   deactivate(@Param('id') id: string) {
     return this.hospitalsService.deactivate(id);
   }
