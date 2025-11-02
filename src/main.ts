@@ -1,16 +1,24 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import helmet from 'helmet';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+  });
+
+  // Serve static files for uploads
+  const uploadPath = process.env.UPLOAD_PATH || join(process.cwd(), 'uploads');
+  app.useStaticAssets(uploadPath, {
+    prefix: `/${process.env.API_PREFIX || 'api'}/files/`,
   });
 
   // Security
@@ -75,6 +83,7 @@ async function bootstrap() {
     .addTag('Payments', 'Payment processing')
     .addTag('Schedules', 'Schedule management')
     .addTag('Analytics', 'Analytics and reports')
+    .addTag('File Upload', 'File upload and management')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
@@ -91,4 +100,7 @@ async function bootstrap() {
   console.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('Error starting server:', error);
+  process.exit(1);
+});

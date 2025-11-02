@@ -20,6 +20,9 @@ import { SchedulerModule } from './core/scheduler/scheduler.module';
 import { NotificationModule } from './integrations/notification/notification.module';
 import { PaymentModule } from './integrations/payment/payment.module';
 
+// Common Modules
+import { FileUploadModule } from './common/service/file-upload/file-upload.module';
+
 // Feature Modules
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
@@ -80,6 +83,9 @@ import { WorkHoursModule } from './modules/work-hours/work-hours.module';
     // Integration modules
     NotificationModule,
     PaymentModule,
+
+    // Common modules
+    FileUploadModule,
 
     // Feature modules
     AuthModule,
