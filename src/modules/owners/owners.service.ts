@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Hospital, HospitalDocument } from '../hospitals/entities/hospital.entity';
+import {
+  Hospital,
+  HospitalDocument,
+} from '../hospitals/entities/hospital.entity';
+import { CreateUserDto } from '../users/dto/create-user.dto';
 import { User, UserDocument } from '../users/entities/user.entity';
 
 @Injectable()
@@ -58,13 +62,19 @@ export class OwnersService {
   /**
    * Get all staff for a hospital
    */
-  async getStaffList(hospitalId: string, options?: {
-    role?: string;
-    isActive?: boolean;
-    limit?: number;
-    skip?: number;
-  }) {
-    const query: any = { hospitalId, role: { $in: ['doctor', 'nurse', 'staff', 'receptionist'] } };
+  async getStaffList(
+    hospitalId: string,
+    options?: {
+      role?: string;
+      isActive?: boolean;
+      limit?: number;
+      skip?: number;
+    },
+  ) {
+    const query: any = {
+      hospitalId,
+      role: { $in: ['doctor', 'nurse', 'staff', 'receptionist'] },
+    };
 
     if (options?.role) {
       query.role = options.role;
@@ -92,6 +102,17 @@ export class OwnersService {
   /**
    * Get staff details
    */
+
+  // create staff
+  async createUser(hospitalId: string, createUserDto: CreateUserDto) {
+    const user = await this.userModel.create({
+      ...createUserDto,
+      hospitalId,
+    });
+
+    return user;
+  }
+
   async getStaffDetails(staffId: string) {
     const staff = await this.userModel
       .findById(staffId)
@@ -158,7 +179,11 @@ export class OwnersService {
   /**
    * Block/Unblock staff
    */
-  async toggleStaffStatus(staffId: string, isBlocked: boolean, reason?: string) {
+  async toggleStaffStatus(
+    staffId: string,
+    isBlocked: boolean,
+    reason?: string,
+  ) {
     const staff = await this.userModel.findById(staffId);
 
     if (!staff) {
