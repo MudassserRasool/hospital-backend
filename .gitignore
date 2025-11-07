@@ -60,3 +60,4 @@ generate-modules.js
 generate-modules.py
 setup-structure.js
 uploads/
+.dildar.env

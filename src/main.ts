@@ -75,6 +75,9 @@ async function bootstrap() {
       'JWT-auth',
     )
     .addTag('Authentication', 'Authentication and authorization endpoints')
+    .addTag('Super Admin', 'Super Admin management endpoints')
+    .addTag('Reception', 'Reception management endpoints')
+    .addTag('Owners', 'Owner management endpoints')
     .addTag('Users', 'User management')
     .addTag('Hospitals', 'Hospital management')
     .addTag('Patients', 'Patient management')

@@ -24,6 +24,7 @@ import { PaymentModule } from './integrations/payment/payment.module';
 import { FileUploadModule } from './common/service/file-upload/file-upload.module';
 
 // Feature Modules
+import { AdminModule } from './modules/admin/admin.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -42,6 +43,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { ReceiptTemplatesModule } from './modules/receipt-templates/receipt-templates.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
+import { ReceptionModule } from './modules/reception/reception.module';
 import { ReceptionistsModule } from './modules/receptionists/receptionists.module';
 import { RefundsModule } from './modules/refunds/refunds.module';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -89,10 +91,12 @@ import { WorkHoursModule } from './modules/work-hours/work-hours.module';
 
     // Feature modules
     AuthModule,
+    AdminModule,
     UsersModule,
     PatientsModule,
     StaffModule,
     OwnersModule,
+    ReceptionModule,
     ReceptionistsModule,
     HospitalsModule,
     DepartmentsModule,
