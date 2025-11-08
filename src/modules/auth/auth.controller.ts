@@ -1,13 +1,18 @@
-import { Controller, Post, Get, Body, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { AuthService } from './auth.service';
-import { LoginCredentialsDto } from './dto/login-credentials.dto';
-import { RegisterCredentialsDto } from './dto/register-credentials.dto';
-import { GoogleAuthDto } from './dto/google-auth.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { Public } from '../../common/decorators/public.decorator';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AuthService } from './auth.service';
+import { GoogleAuthDto } from './dto/google-auth.dto';
+import { LoginCredentialsDto } from './dto/login-credentials.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RegisterCredentialsDto } from './dto/register-credentials.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -16,7 +21,10 @@ export class AuthController {
 
   @Public()
   @Post('register/credentials')
-  @ApiOperation({ summary: 'Register with email and password (Web users: Admin, Owner, Receptionist)' })
+  @ApiOperation({
+    summary:
+      'Register with email and password (Web users: Admin, Owner, Receptionist)',
+  })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 409, description: 'User already exists' })
   async registerWithCredentials(@Body() dto: RegisterCredentialsDto) {
@@ -34,7 +42,10 @@ export class AuthController {
 
   @Public()
   @Post('login/google')
-  @ApiOperation({ summary: 'Login/Register with Google OAuth (Mobile users: Patient, Doctor, Staff)' })
+  @ApiOperation({
+    summary:
+      'Login/Register with Google OAuth (Mobile users: Patient, Doctor, Staff)',
+  })
   @ApiResponse({ status: 200, description: 'Login successful' })
   async loginWithGoogle(@Body() dto: GoogleAuthDto) {
     return this.authService.loginWithGoogle(dto);
@@ -65,5 +76,15 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
   async getProfile(@CurrentUser() user: any) {
     return this.authService.getProfile(user.id);
+  }
+
+  // update profile
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Patch('profile')
+  @ApiOperation({ summary: 'Update current user profile' })
+  @ApiResponse({ status: 200, description: 'Profile updated successfully' })
+  async updateProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
+    return this.authService.updateProfile(user.id, dto);
   }
 }

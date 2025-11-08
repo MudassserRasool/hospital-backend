@@ -1,13 +1,18 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import { ConfigService } from '@nestjs/config';
+import { Model } from 'mongoose';
 import { User, UserDocument } from '../users/entities/user.entity';
+import { GoogleAuthDto } from './dto/google-auth.dto';
 import { LoginCredentialsDto } from './dto/login-credentials.dto';
 import { RegisterCredentialsDto } from './dto/register-credentials.dto';
-import { GoogleAuthDto } from './dto/google-auth.dto';
+import { UpdateAuthDto } from './dto/update-auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -45,7 +50,10 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
 
     // Save refresh token
-    await this.saveRefreshToken((user._id as any).toString(), tokens.refreshToken);
+    await this.saveRefreshToken(
+      (user._id as any).toString(),
+      tokens.refreshToken,
+    );
 
     return {
       user: this.sanitizeUser(user),
@@ -56,8 +64,10 @@ export class AuthService {
   // Login with email/password
   async loginWithCredentials(dto: LoginCredentialsDto) {
     // Find user with password field
-    const user = await this.userModel.findOne({ email: dto.email }).select('+password');
-    
+    const user = await this.userModel
+      .findOne({ email: dto.email })
+      .select('+password');
+
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -91,7 +101,10 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
 
     // Save refresh token
-    await this.saveRefreshToken((user._id as any).toString(), tokens.refreshToken);
+    await this.saveRefreshToken(
+      (user._id as any).toString(),
+      tokens.refreshToken,
+    );
 
     return {
       user: this.sanitizeUser(user),
@@ -111,7 +124,7 @@ export class AuthService {
       if (!user.googleId) {
         user.googleId = dto.googleId;
       }
-      
+
       // Update profile picture if provided
       if (dto.profilePicture) {
         user.profilePicture = dto.profilePicture;
@@ -151,7 +164,10 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
 
     // Save refresh token
-    await this.saveRefreshToken((user._id as any).toString(), tokens.refreshToken);
+    await this.saveRefreshToken(
+      (user._id as any).toString(),
+      tokens.refreshToken,
+    );
 
     return {
       user: this.sanitizeUser(user),
@@ -164,13 +180,16 @@ export class AuthService {
     try {
       // Verify refresh token
       const payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get<string>('jwt.refreshSecret') || 
-                this.configService.get<string>('JWT_REFRESH_SECRET'),
+        secret:
+          this.configService.get<string>('jwt.refreshSecret') ||
+          this.configService.get<string>('JWT_REFRESH_SECRET'),
       });
 
       // Find user and check if refresh token exists
-      const user = await this.userModel.findById(payload.sub).select('+refreshTokens');
-      
+      const user = await this.userModel
+        .findById(payload.sub)
+        .select('+refreshTokens');
+
       if (!user || !user.refreshTokens?.includes(refreshToken)) {
         throw new UnauthorizedException('Invalid refresh token');
       }
@@ -185,7 +204,10 @@ export class AuthService {
 
       // Remove old refresh token and save new one
       await this.removeRefreshToken((user._id as any).toString(), refreshToken);
-      await this.saveRefreshToken((user._id as any).toString(), tokens.refreshToken);
+      await this.saveRefreshToken(
+        (user._id as any).toString(),
+        tokens.refreshToken,
+      );
 
       return tokens;
     } catch (error) {
@@ -201,7 +223,20 @@ export class AuthService {
 
   // Get user profile
   async getProfile(userId: string) {
-    const user = await this.userModel.findById(userId).populate('hospitalId', 'name logo');
+    const user = await this.userModel
+      .findById(userId)
+      .populate('hospitalId', 'name logo');
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    return this.sanitizeUser(user);
+  }
+
+  // Update user profile
+  async updateProfile(userId: string, dto: UpdateAuthDto) {
+    const user = await this.userModel.findByIdAndUpdate(userId, dto, {
+      new: true,
+    });
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
@@ -216,12 +251,17 @@ export class AuthService {
       role: user.role,
     };
 
-    const secret = this.configService.get<string>('jwt.secret') || 
-                   this.configService.get<string>('JWT_SECRET') || 'default-secret';
+    const secret =
+      this.configService.get<string>('jwt.secret') ||
+      this.configService.get<string>('JWT_SECRET') ||
+      'default-secret';
     const expiresIn = this.configService.get<string>('jwt.expiresIn') || '1d';
-    const refreshSecret = this.configService.get<string>('jwt.refreshSecret') || 
-                          this.configService.get<string>('JWT_REFRESH_SECRET') || 'default-refresh-secret';
-    const refreshExpiresIn = this.configService.get<string>('jwt.refreshExpiresIn') || '7d';
+    const refreshSecret =
+      this.configService.get<string>('jwt.refreshSecret') ||
+      this.configService.get<string>('JWT_REFRESH_SECRET') ||
+      'default-refresh-secret';
+    const refreshExpiresIn =
+      this.configService.get<string>('jwt.refreshExpiresIn') || '7d';
 
     const accessToken = this.jwtService.sign(payload, {
       secret,
