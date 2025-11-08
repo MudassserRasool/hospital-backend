@@ -8,4 +8,16 @@ export enum UserRole {
   PATIENT = 'patient',
 }
 
+const ROLES = [
+  UserRole.SUPER_ADMIN,
+  UserRole.OWNER,
+  UserRole.RECEPTIONIST,
+  UserRole.DOCTOR,
+  UserRole.NURSE,
+  UserRole.STAFF,
+  UserRole.PATIENT,
+];
+
 export const ROLES_KEY = 'roles';
+
+export default ROLES;
