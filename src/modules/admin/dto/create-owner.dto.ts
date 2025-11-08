@@ -26,4 +26,14 @@ export class CreateOwnerDto {
   @IsString()
   @IsNotEmpty()
   hospitalId: string;
+
+  @ApiProperty({ example: 'password123' })
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+
+  @ApiProperty({ example: 'owner' })
+  @IsString()
+  @IsNotEmpty()
+  role: string;
 }

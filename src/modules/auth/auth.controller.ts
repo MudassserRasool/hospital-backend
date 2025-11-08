@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -13,6 +13,7 @@ import { GoogleAuthDto } from './dto/google-auth.dto';
 import { LoginCredentialsDto } from './dto/login-credentials.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterCredentialsDto } from './dto/register-credentials.dto';
+import { UpdateProfileDto } from './dto/update-auth.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')

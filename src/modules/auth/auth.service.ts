@@ -12,7 +12,7 @@ import { User, UserDocument } from '../users/entities/user.entity';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { LoginCredentialsDto } from './dto/login-credentials.dto';
 import { RegisterCredentialsDto } from './dto/register-credentials.dto';
-import { UpdateAuthDto } from './dto/update-auth.dto';
+import { UpdateProfileDto } from './dto/update-auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -233,7 +233,7 @@ export class AuthService {
   }
 
   // Update user profile
-  async updateProfile(userId: string, dto: UpdateAuthDto) {
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
     const user = await this.userModel.findByIdAndUpdate(userId, dto, {
       new: true,
     });
