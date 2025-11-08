@@ -167,6 +167,9 @@ export class AdminService {
       query.isBlocked = params.isBlocked === 'true';
     }
 
+    console.log(params, '11111111111111111111111');
+    console.log(query, '111111111111111111111111111111');
+
     const owners = await this.userModel
       .find(query)
       .select('-password -refreshTokens')
@@ -175,6 +178,10 @@ export class AdminService {
       .limit(params?.limit || 50)
       .skip(params?.skip || 0)
       .exec();
+
+    console.log(query, '2222222222224222222222222d222222');
+
+    console.log(owners, '222222222222222222222222222222');
 
     const total = await this.userModel.countDocuments(query);
 

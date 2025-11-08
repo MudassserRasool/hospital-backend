@@ -1,9 +1,19 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { DepartmentsService } from './departments.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { DepartmentsService } from './departments.service';
 
 @ApiTags('Departments')
 @ApiBearerAuth('JWT-auth')
@@ -13,7 +23,7 @@ export class DepartmentsController {
   constructor(private readonly service: DepartmentsService) {}
 
   @Post()
-  @Roles('super_admin', 'owner')
+  @Roles('super_admin', 'owner', 'receptionist')
   create(@Body() createDto: any) {
     return this.service.create(createDto);
   }
@@ -29,13 +39,13 @@ export class DepartmentsController {
   }
 
   @Patch(':id')
-  @Roles('super_admin', 'owner')
+  @Roles('super_admin', 'owner', 'receptionist')
   update(@Param('id') id: string, @Body() updateDto: any) {
     return this.service.update(id, updateDto);
   }
 
   @Delete(':id')
-  @Roles('super_admin')
+  @Roles('super_admin', 'owner', 'receptionist')
   remove(@Param('id') id: string) {
     return this.service.remove(id);
   }
