@@ -196,8 +196,8 @@ export class AdminService {
     }
 
     // Generate random password
-    const tempPassword = this.generateTempPassword();
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
 
     const owner = await this.userModel.create({
       email: data.email,
@@ -221,7 +221,7 @@ export class AdminService {
     // Return owner with temporary password (send via email in production)
     return {
       owner: owner.toObject(),
-      temporaryPassword: tempPassword,
+      password: data.password,
       message:
         'Owner created successfully. Please share the temporary password securely.',
     };

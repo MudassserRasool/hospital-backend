@@ -1,6 +1,15 @@
-import { IsString, IsNotEmpty, IsOptional, IsDate, IsEnum, IsArray, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsDate,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+import { BLOOD_TYPES } from 'src/common/constants/paitent';
 
 class EmergencyContactDto {
   @ApiProperty()
@@ -36,8 +45,11 @@ export class CreatePatientDto {
   @IsOptional()
   gender?: string;
 
-  @ApiProperty({ enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'], required: false })
-  @IsEnum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
+  @ApiProperty({
+    enum: BLOOD_TYPES,
+    required: false,
+  })
+  @IsEnum(BLOOD_TYPES)
   @IsOptional()
   bloodType?: string;
 
@@ -71,4 +83,16 @@ export class CreatePatientDto {
   @IsString()
   @IsOptional()
   insurancePolicyNumber?: string;
+
+  // hospital id
+  @ApiProperty({ required: true })
+  @IsString()
+  @IsNotEmpty()
+  hospitalId?: string;
+
+  // phone number
+  @ApiProperty({ required: true })
+  @IsString()
+  @IsNotEmpty()
+  phone: string;
 }

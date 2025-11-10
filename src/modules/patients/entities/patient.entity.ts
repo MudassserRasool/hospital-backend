@@ -1,5 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { GENDER_TYPES_ARRAY } from 'src/common/constants';
+import { BLOOD_TYPES } from 'src/common/constants/paitent';
 
 export type PatientDocument = Patient & Document;
 
@@ -11,10 +13,10 @@ export class Patient {
   @Prop()
   dateOfBirth?: Date;
 
-  @Prop({ enum: ['male', 'female', 'other'] })
+  @Prop({ enum: GENDER_TYPES_ARRAY })
   gender?: string;
 
-  @Prop({ enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] })
+  @Prop({ enum: BLOOD_TYPES })
   bloodType?: string;
 
   @Prop({ type: [String], default: [] })
@@ -83,6 +85,14 @@ export class Patient {
 
   createdAt?: Date;
   updatedAt?: Date;
+
+  // hospital id
+  @Prop({ type: Types.ObjectId, ref: 'Hospital', required: true })
+  hospitalId: Types.ObjectId;
+
+  // phone number
+  @Prop({ required: false, unique: true })
+  phone: string;
 }
 
 export const PatientSchema = SchemaFactory.createForClass(Patient);

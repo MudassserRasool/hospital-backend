@@ -1,12 +1,27 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { PatientsService } from './patients.service';
-import { CreatePatientDto } from './dto/create-patient.dto';
-import { UpdatePatientDto } from './dto/update-patient.dto';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CreatePatientDto } from './dto/create-patient.dto';
+import { UpdatePatientDto } from './dto/update-patient.dto';
+import { PatientsService } from './patients.service';
 
 @ApiTags('Patients')
 @ApiBearerAuth('JWT-auth')
@@ -16,7 +31,9 @@ export class PatientsController {
   constructor(private readonly patientsService: PatientsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create patient profile (auto during Google OAuth)' })
+  @ApiOperation({
+    summary: 'Create patient profile (auto during Google OAuth)',
+  })
   @ApiResponse({ status: 201, description: 'Patient created successfully' })
   @ApiResponse({ status: 409, description: 'Patient already exists' })
   create(@Body() createPatientDto: CreatePatientDto) {
@@ -26,9 +43,20 @@ export class PatientsController {
   @Get('me')
   @Roles('patient')
   @ApiOperation({ summary: 'Get current patient profile' })
-  @ApiResponse({ status: 200, description: 'Patient profile retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Patient profile retrieved successfully',
+  })
   getMyProfile(@CurrentUser() user: any) {
     return this.patientsService.findByUserId(user.id);
+  }
+
+  // Get paitent by phone number
+  @Get('phone/:phone')
+  @ApiOperation({ summary: 'Get patient by phone number' })
+  @ApiResponse({ status: 200, description: 'Patient retrieved successfully' })
+  getPatientByPhone(@Param('phone') phone: string) {
+    return this.patientsService.getPatientByPhone(phone);
   }
 
   @Get()
@@ -56,7 +84,10 @@ export class PatientsController {
 
   @Get(':id/appointments')
   @ApiOperation({ summary: 'Get patient appointments' })
-  @ApiResponse({ status: 200, description: 'Appointments retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointments retrieved successfully',
+  })
   getAppointments(@Param('id') id: string) {
     return this.patientsService.getPatientAppointments(id);
   }
@@ -64,7 +95,10 @@ export class PatientsController {
   @Get(':id/medical-records')
   @Roles('doctor', 'nurse', 'receptionist', 'owner', 'patient')
   @ApiOperation({ summary: 'Get patient medical records' })
-  @ApiResponse({ status: 200, description: 'Medical records retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Medical records retrieved successfully',
+  })
   getMedicalRecords(@Param('id') id: string) {
     return this.patientsService.getPatientMedicalRecords(id);
   }

@@ -1,9 +1,13 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Patient, PatientDocument } from './entities/patient.entity';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
+import { Patient, PatientDocument } from './entities/patient.entity';
 
 @Injectable()
 export class PatientsService {
@@ -13,14 +17,19 @@ export class PatientsService {
 
   async create(createPatientDto: CreatePatientDto) {
     // Check if patient profile already exists for this user
-    const existing = await this.patientModel.findOne({ userId: createPatientDto.userId });
+    const existing = await this.patientModel.findOne({
+      userId: createPatientDto.userId,
+    });
     if (existing) {
-      throw new ConflictException('Patient profile already exists for this user');
+      throw new ConflictException(
+        'Patient profile already exists for this user',
+      );
     }
 
     // Generate medical record number if not provided
     if (!createPatientDto.medicalRecordNumber) {
-      createPatientDto.medicalRecordNumber = await this.generateMedicalRecordNumber();
+      createPatientDto.medicalRecordNumber =
+        await this.generateMedicalRecordNumber();
     }
 
     const patient = await this.patientModel.create({
@@ -32,7 +41,10 @@ export class PatientsService {
       noShowAppointments: 0,
     });
 
-    return patient.populate('userId', 'firstName lastName email phone profilePicture');
+    return patient.populate(
+      'userId',
+      'firstName lastName email phone profilePicture',
+    );
   }
 
   async findAll(filters?: any) {
@@ -63,6 +75,17 @@ export class PatientsService {
       .populate('userId', 'firstName lastName email phone profilePicture')
       .exec();
 
+    return patient;
+  }
+
+  async getPatientByPhone(phone: string) {
+    const patient = await this.patientModel
+      .findOne({ phone })
+      .populate('userId', 'firstName lastName email phone profilePicture')
+      .exec();
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
     return patient;
   }
 
@@ -159,7 +182,8 @@ export class PatientsService {
       allergies: patient.allergies || [],
       chronicConditions: patient.chronicConditions || [],
       bloodType: patient.bloodType,
-      message: 'Full medical records will be fetched from Medical Records module',
+      message:
+        'Full medical records will be fetched from Medical Records module',
     };
   }
 
@@ -178,7 +202,9 @@ export class PatientsService {
   private async generateMedicalRecordNumber(): Promise<string> {
     const prefix = 'MRN';
     const timestamp = Date.now().toString().slice(-6);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const random = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, '0');
     return `${prefix}${timestamp}${random}`;
   }
 }

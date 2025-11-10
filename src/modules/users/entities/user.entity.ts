@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import ROLES from 'src/common/constants/roles.constant';
 
 export type UserDocument = User & Document;
 
@@ -16,14 +17,14 @@ export class User {
 
   @Prop({
     required: true,
-    enum: ['super_admin', 'owner', 'receptionist', 'doctor', 'nurse', 'staff', 'patient'],
+    enum: ROLES,
   })
   role: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false })
   firstName: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false })
   lastName: string;
 
   @Prop()
