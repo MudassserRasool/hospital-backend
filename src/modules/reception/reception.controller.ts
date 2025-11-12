@@ -1,10 +1,26 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { ReceptionService } from './reception.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ReceptionService } from './reception.service';
 
 @ApiTags('Reception')
 @ApiBearerAuth('JWT-auth')
@@ -25,14 +41,20 @@ export class ReceptionController {
 
   @Patch('appointments/:id/confirm')
   @ApiOperation({ summary: 'Confirm appointment' })
-  @ApiResponse({ status: 200, description: 'Appointment confirmed successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment confirmed successfully',
+  })
   confirmAppointment(@Param('id') id: string, @CurrentUser() user: any) {
     return this.receptionService.confirmAppointment(id, user.id);
   }
 
   @Patch('appointments/:id/reject')
   @ApiOperation({ summary: 'Reject appointment' })
-  @ApiResponse({ status: 200, description: 'Appointment rejected successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointment rejected successfully',
+  })
   rejectAppointment(
     @Param('id') id: string,
     @Body('reason') reason: string,
@@ -43,14 +65,20 @@ export class ReceptionController {
 
   @Get('appointments/today')
   @ApiOperation({ summary: "Get today's appointments" })
-  @ApiResponse({ status: 200, description: 'Appointments retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointments retrieved successfully',
+  })
   getTodayAppointments(@CurrentUser() user: any) {
     return this.receptionService.getTodayAppointments(user.hospitalId);
   }
 
   @Get('appointments/date/:date')
   @ApiOperation({ summary: 'Get appointments by date' })
-  @ApiResponse({ status: 200, description: 'Appointments retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Appointments retrieved successfully',
+  })
   getAppointmentsByDate(@Param('date') date: string, @CurrentUser() user: any) {
     return this.receptionService.getAppointmentsByDate(user.hospitalId, date);
   }
@@ -150,6 +178,14 @@ export class ReceptionController {
     return this.receptionService.getDoctors(user.hospitalId, params);
   }
 
+  // get doctor by id
+  @Get('doctors/:id')
+  @ApiOperation({ summary: 'Get doctor by id' })
+  @ApiResponse({ status: 200, description: 'Doctor retrieved successfully' })
+  getDoctorById(@Param('id') id: string) {
+    return this.receptionService.getDoctorById(id);
+  }
+
   @Post('doctors')
   @ApiOperation({ summary: 'Add doctor' })
   @ApiResponse({ status: 201, description: 'Doctor added successfully' })
@@ -164,6 +200,14 @@ export class ReceptionController {
     return this.receptionService.updateDoctor(id, data);
   }
 
+  // delete doctor
+  @Delete('doctors/:id')
+  @ApiOperation({ summary: 'Delete doctor' })
+  @ApiResponse({ status: 200, description: 'Doctor deleted successfully' })
+  deleteDoctor(@Param('id') id: string) {
+    return this.receptionService.deleteDoctor(id);
+  }
+
   @Patch('doctors/:id/block')
   @ApiOperation({ summary: 'Block doctor' })
   @ApiResponse({ status: 200, description: 'Doctor blocked successfully' })
@@ -173,6 +217,13 @@ export class ReceptionController {
     @CurrentUser() user: any,
   ) {
     return this.receptionService.blockDoctor(id, reason, user.id);
+  }
+
+  @Patch('doctors/:id/unblock')
+  @ApiOperation({ summary: 'Unblock doctor' })
+  @ApiResponse({ status: 200, description: 'Doctor unblocked successfully' })
+  unblockDoctor(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.receptionService.unblockDoctor(id, user.id as string);
   }
 
   @Put('doctors/:id/schedule')
@@ -199,7 +250,11 @@ export class ReceptionController {
     @Param('month') month: string,
     @CurrentUser() user: any,
   ) {
-    return this.receptionService.getMonthlyAnalytics(user.hospitalId, year, month);
+    return this.receptionService.getMonthlyAnalytics(
+      user.hospitalId,
+      year,
+      month,
+    );
   }
 
   @Get('analytics/patient-volume')
@@ -209,4 +264,3 @@ export class ReceptionController {
     return this.receptionService.getPatientVolume(user.hospitalId, params);
   }
 }
-

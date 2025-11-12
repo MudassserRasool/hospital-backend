@@ -1,16 +1,24 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Appointment, AppointmentDocument } from '../appointments/entities/appointment.entity';
-import { Patient, PatientDocument } from '../patients/entities/patient.entity';
-import { User, UserDocument } from '../users/entities/user.entity';
-import { Receipt, ReceiptDocument } from '../receipts/entities/receipt.entity';
 import * as bcrypt from 'bcrypt';
+import { Model } from 'mongoose';
+import {
+  Appointment,
+  AppointmentDocument,
+} from '../appointments/entities/appointment.entity';
+import { Patient, PatientDocument } from '../patients/entities/patient.entity';
+import { Receipt, ReceiptDocument } from '../receipts/entities/receipt.entity';
+import { User, UserDocument } from '../users/entities/user.entity';
 
 @Injectable()
 export class ReceptionService {
   constructor(
-    @InjectModel(Appointment.name) private appointmentModel: Model<AppointmentDocument>,
+    @InjectModel(Appointment.name)
+    private appointmentModel: Model<AppointmentDocument>,
     @InjectModel(Patient.name) private patientModel: Model<PatientDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Receipt.name) private receiptModel: Model<ReceiptDocument>,
@@ -41,7 +49,9 @@ export class ReceptionService {
     }
 
     if (appointment.status !== 'pending') {
-      throw new BadRequestException(`Cannot confirm appointment with status: ${appointment.status}`);
+      throw new BadRequestException(
+        `Cannot confirm appointment with status: ${appointment.status}`,
+      );
     }
 
     appointment.status = 'confirmed';
@@ -118,14 +128,18 @@ export class ReceptionService {
   // ========== PATIENT CHECK-IN ==========
 
   async checkInPatient(data: any, checkedInBy: string) {
-    const appointment = await this.appointmentModel.findById(data.appointmentId);
+    const appointment = await this.appointmentModel.findById(
+      data.appointmentId,
+    );
 
     if (!appointment) {
       throw new NotFoundException('Appointment not found');
     }
 
     if (appointment.status !== 'confirmed') {
-      throw new BadRequestException('Only confirmed appointments can be checked in');
+      throw new BadRequestException(
+        'Only confirmed appointments can be checked in',
+      );
     }
 
     appointment.status = 'checked_in';
@@ -133,10 +147,7 @@ export class ReceptionService {
 
     await appointment.save();
 
-    return appointment.populate([
-      { path: 'patientId' },
-      { path: 'doctorId' },
-    ]);
+    return appointment.populate([{ path: 'patientId' }, { path: 'doctorId' }]);
   }
 
   async recordVitals(appointmentId: string, vitals: any, recordedBy: string) {
@@ -191,14 +202,16 @@ export class ReceptionService {
 
     if (params?.search) {
       // Search in user's firstName, lastName, email
-      const users = await this.userModel.find({
-        $or: [
-          { firstName: { $regex: params.search, $options: 'i' } },
-          { lastName: { $regex: params.search, $options: 'i' } },
-          { email: { $regex: params.search, $options: 'i' } },
-        ],
-        role: 'patient',
-      }).select('_id');
+      const users = await this.userModel
+        .find({
+          $or: [
+            { firstName: { $regex: params.search, $options: 'i' } },
+            { lastName: { $regex: params.search, $options: 'i' } },
+            { email: { $regex: params.search, $options: 'i' } },
+          ],
+          role: 'patient',
+        })
+        .select('_id');
 
       query.userId = { $in: users.map((u) => u._id) };
     }
@@ -340,7 +353,9 @@ export class ReceptionService {
       patient,
       appointments,
       totalAppointments: appointments.length,
-      completedAppointments: appointments.filter((a) => a.status === 'completed').length,
+      completedAppointments: appointments.filter(
+        (a) => a.status === 'completed',
+      ).length,
     };
   }
 
@@ -374,6 +389,39 @@ export class ReceptionService {
     return { doctors, total };
   }
 
+  async getDoctorById(id: string) {
+    // Get main doctor record
+    const doctor = await this.userModel
+      .findById(id)
+      .select('-password -refreshTokens')
+      // .populate('hospitalId', 'name address')
+      .exec();
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    // Fetch appointments handled by the doctor
+    const appointments = await this.appointmentModel
+      .find({ doctorId: id })
+      .populate('patientId', 'firstName lastName')
+      // .populate('hospitalId', 'name')
+      .sort({ date: -1 })
+      .exec();
+
+    return {
+      ...doctor.toObject(),
+      appointments,
+      totalAppointments: appointments.length,
+      completedAppointments: appointments.filter(
+        (a) => a.status === 'completed',
+      ).length,
+      upcomingAppointments: appointments.filter(
+        (a) => a.status === 'scheduled' || a.status === 'upcoming',
+      ).length,
+    };
+  }
+
   async createDoctor(data: any, hospitalId: string) {
     // Check if email exists
     const existing = await this.userModel.findOne({ email: data.email });
@@ -392,6 +440,10 @@ export class ReceptionService {
       phone: data.phone,
       role: 'doctor',
       hospitalId,
+      specialization: data.specialization,
+      licenseNumber: data.licenseNumber,
+      experience: data.experience,
+      timing: data.timing || [],
       isActive: true,
     });
 
@@ -414,6 +466,14 @@ export class ReceptionService {
     return doctor;
   }
 
+  async deleteDoctor(id: string) {
+    const doctor = await this.userModel.findByIdAndDelete(id);
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+    return { message: 'Doctor deleted successfully' };
+  }
+
   async blockDoctor(id: string, reason: string, blockedBy: string) {
     const doctor = await this.userModel.findById(id);
 
@@ -428,6 +488,18 @@ export class ReceptionService {
 
     await doctor.save();
 
+    return doctor;
+  }
+
+  async unblockDoctor(id: string, unblockedBy: string) {
+    const doctor = await this.userModel.findById(id);
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+    doctor.isBlocked = false;
+    doctor.blockedReason = undefined;
+    doctor.blockedBy = unblockedBy as any;
+    await doctor.save();
     return doctor;
   }
 
@@ -455,9 +527,13 @@ export class ReceptionService {
     });
 
     const totalAppointments = appointments.length;
-    const attended = appointments.filter((a) => a.status === 'completed' || a.status === 'checked_in').length;
+    const attended = appointments.filter(
+      (a) => a.status === 'completed' || a.status === 'checked_in',
+    ).length;
     const noShows = appointments.filter((a) => a.status === 'no_show').length;
-    const cancelled = appointments.filter((a) => a.status === 'cancelled').length;
+    const cancelled = appointments.filter(
+      (a) => a.status === 'cancelled',
+    ).length;
     const revenue = appointments
       .filter((a) => a.paymentStatus === 'paid')
       .reduce((sum, a) => sum + a.paymentAmount, 0);
@@ -469,21 +545,34 @@ export class ReceptionService {
       noShows,
       cancelled,
       revenue,
-      attendanceRate: totalAppointments > 0 ? (attended / totalAppointments) * 100 : 0,
+      attendanceRate:
+        totalAppointments > 0 ? (attended / totalAppointments) * 100 : 0,
     };
   }
 
   async getMonthlyAnalytics(hospitalId: string, year: string, month: string) {
     const startOfMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
-    const endOfMonth = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
+    const endOfMonth = new Date(
+      parseInt(year),
+      parseInt(month),
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
 
-    const appointments = await this.appointmentModel.find({
-      hospitalId,
-      date: { $gte: startOfMonth, $lte: endOfMonth },
-    }).populate('doctorId', 'firstName lastName');
+    const appointments = await this.appointmentModel
+      .find({
+        hospitalId,
+        date: { $gte: startOfMonth, $lte: endOfMonth },
+      })
+      .populate('doctorId', 'firstName lastName');
 
     const totalAppointments = appointments.length;
-    const attended = appointments.filter((a) => a.status === 'completed').length;
+    const attended = appointments.filter(
+      (a) => a.status === 'completed',
+    ).length;
     const noShows = appointments.filter((a) => a.status === 'no_show').length;
     const revenue = appointments
       .filter((a) => a.paymentStatus === 'paid')
@@ -494,7 +583,11 @@ export class ReceptionService {
     const uniquePatients = [...new Set(patientIds)];
 
     // Group by day
-    const appointmentsByDay = this.groupAppointmentsByDay(appointments, startOfMonth, endOfMonth);
+    const appointmentsByDay = this.groupAppointmentsByDay(
+      appointments,
+      startOfMonth,
+      endOfMonth,
+    );
 
     // Top doctors
     const doctorStats = this.calculateDoctorStats(appointments);
@@ -507,8 +600,10 @@ export class ReceptionService {
       noShows,
       cancelled: appointments.filter((a) => a.status === 'cancelled').length,
       revenue,
-      attendanceRate: totalAppointments > 0 ? (attended / totalAppointments) * 100 : 0,
-      noShowRate: totalAppointments > 0 ? (noShows / totalAppointments) * 100 : 0,
+      attendanceRate:
+        totalAppointments > 0 ? (attended / totalAppointments) * 100 : 0,
+      noShowRate:
+        totalAppointments > 0 ? (noShows / totalAppointments) * 100 : 0,
       uniquePatients: uniquePatients.length,
       appointmentsByDay,
       topDoctors: doctorStats.slice(0, 5),
@@ -526,7 +621,11 @@ export class ReceptionService {
       date: { $gte: startDate, $lte: endDate },
     });
 
-    const volumeByDay = this.groupAppointmentsByDay(appointments, startDate, endDate);
+    const volumeByDay = this.groupAppointmentsByDay(
+      appointments,
+      startDate,
+      endDate,
+    );
 
     return {
       startDate,
@@ -539,7 +638,11 @@ export class ReceptionService {
 
   // ========== HELPERS ==========
 
-  private groupAppointmentsByDay(appointments: any[], startDate: Date, endDate: Date) {
+  private groupAppointmentsByDay(
+    appointments: any[],
+    startDate: Date,
+    endDate: Date,
+  ) {
     const days: any[] = [];
     const current = new Date(startDate);
 
@@ -579,7 +682,9 @@ export class ReceptionService {
       stats.appointments++;
     });
 
-    return Array.from(doctorMap.values()).sort((a, b) => b.appointments - a.appointments);
+    return Array.from(doctorMap.values()).sort(
+      (a, b) => b.appointments - a.appointments,
+    );
   }
 
   private generateTempPassword(): string {
@@ -595,8 +700,9 @@ export class ReceptionService {
   private async generateReceiptNumber(): Promise<string> {
     const prefix = 'RCP';
     const timestamp = Date.now().toString().slice(-8);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const random = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, '0');
     return `${prefix}${timestamp}${random}`;
   }
 }
-

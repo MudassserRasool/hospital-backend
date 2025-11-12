@@ -53,6 +53,17 @@ export class User {
 
   @Prop({ type: [String], select: false })
   refreshTokens?: string[];
+  @Prop()
+  experience?: string;
+
+  @Prop()
+  licenseNumber?: string;
+
+  @Prop()
+  specialization?: string;
+
+  @Prop({ type: [Date], default: [] })
+  timing?: Date[];
 
   @Prop()
   lastLoginAt?: Date;
