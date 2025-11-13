@@ -1,6 +1,5 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
 
 @Injectable()
 export class PaymentService {
@@ -10,9 +9,12 @@ export class PaymentService {
   private readonly storeId: string;
 
   constructor(private configService: ConfigService) {
-    this.easyPaisaApiUrl = this.configService.get<string>('EASYPAISA_API_URL') || '';
-    this.merchantId = this.configService.get<string>('EASYPAISA_MERCHANT_ID') || '';
-    this.secretKey = this.configService.get<string>('EASYPAISA_SECRET_KEY') || '';
+    this.easyPaisaApiUrl =
+      this.configService.get<string>('EASYPAISA_API_URL') || '';
+    this.merchantId =
+      this.configService.get<string>('EASYPAISA_MERCHANT_ID') || '';
+    this.secretKey =
+      this.configService.get<string>('EASYPAISA_SECRET_KEY') || '';
     this.storeId = this.configService.get<string>('EASYPAISA_STORE_ID') || '';
   }
 
@@ -49,7 +51,7 @@ export class PaymentService {
   async verifyPayment(transactionId: string) {
     try {
       // Placeholder - implement actual verification with EasyPaisa API
-      
+
       // Mock response
       const response = {
         success: true,
