@@ -1,34 +1,139 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { CreateUserDto } from '../users/dto/create-user.dto';
 import { OwnersService } from './owners.service';
-import { CreateOwnerDto } from './dto/create-owner.dto';
-import { UpdateOwnerDto } from './dto/update-owner.dto';
 
+@ApiTags('Owners')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('owner')
 @Controller('owners')
 export class OwnersController {
   constructor(private readonly ownersService: OwnersService) {}
 
-  @Post()
-  create(@Body() createOwnerDto: CreateOwnerDto) {
-    return this.ownersService.create(createOwnerDto);
+  @Get('me')
+  @ApiOperation({ summary: 'Get owner profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Owner profile retrieved successfully',
+  })
+  getOwnerProfile(@CurrentUser() user: any) {
+    return this.ownersService.getOwnerProfile(user.id);
   }
 
-  @Get()
-  findAll() {
-    return this.ownersService.findAll();
+  @Get('hospital')
+  @ApiOperation({ summary: 'Get hospital details' })
+  @ApiResponse({
+    status: 200,
+    description: 'Hospital details retrieved successfully',
+  })
+  getHospital(@CurrentUser() user: any) {
+    return this.ownersService.getHospital(user.hospitalId);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.ownersService.findOne(+id);
+  @Put('hospital')
+  @ApiOperation({ summary: 'Update hospital profile' })
+  @ApiResponse({ status: 200, description: 'Hospital updated successfully' })
+  updateHospital(@CurrentUser() user: any, @Body() updateData: any) {
+    return this.ownersService.updateHospital(user.hospitalId, updateData);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateOwnerDto: UpdateOwnerDto) {
-    return this.ownersService.update(+id, updateOwnerDto);
+  @Get('staff')
+  @ApiOperation({ summary: 'Get all staff members' })
+  @ApiResponse({
+    status: 200,
+    description: 'Staff list retrieved successfully',
+  })
+  getStaffList(
+    @CurrentUser() user: any,
+    @Query('role') role?: string,
+    @Query('isActive') isActive?: string,
+    @Query('limit') limit?: number,
+    @Query('skip') skip?: number,
+  ) {
+    return this.ownersService.getStaffList(user.hospitalId, {
+      role,
+      isActive: isActive ? isActive === 'true' : undefined,
+      limit: limit ? Number(limit) : 50,
+      skip: skip ? Number(skip) : 0,
+    });
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.ownersService.remove(+id);
+  // create staff
+  @Post('staff')
+  @ApiOperation({ summary: 'Create staff member' })
+  @ApiResponse({ status: 201, description: 'Staff created successfully' })
+  createStaff(@CurrentUser() user: any, @Body() createUserDto: CreateUserDto) {
+    return this.ownersService.createUser(user.hospitalId, createUserDto);
+  }
+
+  @Get('staff/:staffId')
+  @ApiOperation({ summary: 'Get staff details' })
+  @ApiResponse({
+    status: 200,
+    description: 'Staff details retrieved successfully',
+  })
+  getStaffDetails(@Param('staffId') staffId: string) {
+    return this.ownersService.getStaffDetails(staffId);
+  }
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Get hospital statistics' })
+  @ApiResponse({
+    status: 200,
+    description: 'Statistics retrieved successfully',
+  })
+  getHospitalStats(@CurrentUser() user: any) {
+    return this.ownersService.getHospitalStats(user.hospitalId);
+  }
+
+  @Patch('staff/:staffId/block')
+  @ApiOperation({ summary: 'Block staff member' })
+  @ApiResponse({ status: 200, description: 'Staff blocked successfully' })
+  blockStaff(
+    @Param('staffId') staffId: string,
+    @Body('reason') reason: string,
+  ) {
+    return this.ownersService.toggleStaffStatus(staffId, true, reason);
+  }
+
+  @Patch('staff/:staffId/unblock')
+  @ApiOperation({ summary: 'Unblock staff member' })
+  @ApiResponse({ status: 200, description: 'Staff unblocked successfully' })
+  unblockStaff(@Param('staffId') staffId: string) {
+    return this.ownersService.toggleStaffStatus(staffId, false);
+  }
+
+  @Patch('staff/:staffId/activate')
+  @ApiOperation({ summary: 'Activate staff member' })
+  @ApiResponse({ status: 200, description: 'Staff activated successfully' })
+  activateStaff(@Param('staffId') staffId: string) {
+    return this.ownersService.toggleStaffActiveStatus(staffId, true);
+  }
+
+  @Patch('staff/:staffId/deactivate')
+  @ApiOperation({ summary: 'Deactivate staff member' })
+  @ApiResponse({ status: 200, description: 'Staff deactivated successfully' })
+  deactivateStaff(@Param('staffId') staffId: string) {
+    return this.ownersService.toggleStaffActiveStatus(staffId, false);
   }
 }
