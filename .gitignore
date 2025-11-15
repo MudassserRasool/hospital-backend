@@ -60,3 +60,6 @@ generate-modules.js
 generate-modules.py
 setup-structure.js
 .gitignore
+
+
+.cursorignore
