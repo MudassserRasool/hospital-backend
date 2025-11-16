@@ -332,7 +332,7 @@ export class AuthService {
 
     // create a dummy gest user
     const gestUser = await this.userModel.create({
-      email: `gest-${mobilePackageId}@gest.com`,
+      email: `gest-${mobilePackageId}${Math.random().toString(36).substring(2, 15)}@gest.com`,
       password: Math.random().toString(36).substring(2, 15),
       role: UserRole.PATIENT,
       hospitalId: (hospital._id as any).toString(),
