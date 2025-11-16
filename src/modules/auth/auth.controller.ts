@@ -9,6 +9,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
+import { GenerateGestTokenDto } from './dto/generate-gest-token.dto';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { LoginCredentialsDto } from './dto/login-credentials.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -87,5 +88,30 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
   async updateProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
     return this.authService.updateProfile(user.id, dto);
+  }
+
+  // generate gest token by using mobile package id
+  @Public()
+  @Post('generate-gest-token')
+  @ApiOperation({ summary: 'Generate guest token by using mobile package id' })
+  @ApiResponse({
+    status: 200,
+    description: 'Guest token generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        guestToken: {
+          type: 'string',
+          description: 'JWT guest token for the hospital',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Hospital not found',
+  })
+  generateGestToken(@Body() dto: GenerateGestTokenDto) {
+    return this.authService.generateGestToken(dto.mobilePackageId);
   }
 }

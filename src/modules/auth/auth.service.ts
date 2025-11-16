@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
+import { HospitalsService } from '../hospitals/hospitals.service';
 import { User, UserDocument } from '../users/entities/user.entity';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { LoginCredentialsDto } from './dto/login-credentials.dto';
@@ -20,6 +22,7 @@ export class AuthService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private hospitalsService: HospitalsService,
   ) {}
 
   // Register user with email/password (for Super Admin, Owner, Receptionist)
@@ -299,5 +302,33 @@ export class AuthService {
     delete userObj.password;
     delete userObj.refreshTokens;
     return userObj;
+  }
+
+  // generate gest token by using mobile package id
+  async generateGestToken(mobilePackageId: string) {
+    const hospital =
+      await this.hospitalsService.getMobilePackageId(mobilePackageId);
+    if (!hospital) {
+      throw new NotFoundException('Hospital not found');
+    }
+
+    // Generate a guest token for the hospital
+    const payload = {
+      hospitalId: (hospital._id as any).toString(),
+      mobilePackageId: hospital.mobilePackageId,
+      type: 'guest',
+    };
+
+    const guestSecret =
+      this.configService.get<string>('jwt.guestSecret') ||
+      this.configService.get<string>('JWT_GUEST_SECRET') ||
+      'default-guest-secret';
+
+    const guestToken = this.jwtService.sign(payload, {
+      secret: guestSecret,
+      expiresIn: '30d', // Guest tokens last 30 days
+    } as any);
+
+    return { guestToken };
   }
 }
