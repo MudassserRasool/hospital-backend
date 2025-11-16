@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
+import { UserRole } from '../../common/constants/roles.constant';
 import { HospitalsService } from '../hospitals/hospitals.service';
 import { User, UserDocument } from '../users/entities/user.entity';
 import { GoogleAuthDto } from './dto/google-auth.dto';
@@ -329,6 +330,15 @@ export class AuthService {
       expiresIn: '30d', // Guest tokens last 30 days
     } as any);
 
-    return { guestToken };
+    // create a dummy gest user
+    const gestUser = await this.userModel.create({
+      email: `gest-${mobilePackageId}@gest.com`,
+      password: Math.random().toString(36).substring(2, 15),
+      role: UserRole.PATIENT,
+      hospitalId: (hospital._id as any).toString(),
+      isActive: true,
+    });
+
+    return { guestToken, gestUser };
   }
 }

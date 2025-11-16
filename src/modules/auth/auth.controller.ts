@@ -92,7 +92,7 @@ export class AuthController {
 
   // generate gest token by using mobile package id
   @Public()
-  @Post('generate-gest-token')
+  @Post('generate-guest-token')
   @ApiOperation({ summary: 'Generate guest token by using mobile package id' })
   @ApiResponse({
     status: 200,

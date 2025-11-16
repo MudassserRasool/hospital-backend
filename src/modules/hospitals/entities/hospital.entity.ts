@@ -110,6 +110,10 @@ export class Hospital {
   mobilePackageId: string;
   //  add index
 
+  // add coordinates of hospital
+  @Prop({ type: { latitude: Number, longitude: Number } })
+  coordinates?: { latitude: number; longitude: number };
+
   createdAt?: Date;
   updatedAt?: Date;
 }

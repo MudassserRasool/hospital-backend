@@ -96,6 +96,14 @@ class PaymentConfigDto {
   accountDetails?: any;
 }
 
+class CoordinatesDto {
+  @ApiProperty()
+  @IsNotEmpty()
+  latitude: number;
+  @ApiProperty()
+  @IsNotEmpty()
+  longitude: number;
+}
 export class CreateHospitalDto {
   @ApiProperty()
   @IsString()
@@ -168,4 +176,10 @@ export class CreateHospitalDto {
   @IsString()
   @IsNotEmpty()
   mobilePackageId: string;
+
+  @ApiProperty({ type: CoordinatesDto, required: false })
+  @ValidateNested()
+  @Type(() => CoordinatesDto)
+  @IsOptional()
+  coordinates?: CoordinatesDto;
 }
