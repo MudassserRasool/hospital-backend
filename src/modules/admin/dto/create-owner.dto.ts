@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsMongoId,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateOwnerDto {
   @ApiProperty({ example: 'owner@hospital.com' })
@@ -22,10 +28,10 @@ export class CreateOwnerDto {
   @IsOptional()
   phone?: string;
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439011', required: true })
-  @IsString()
-  @IsNotEmpty()
-  hospitalId: string;
+  @ApiProperty({ example: '507f1f77bcf86cd799439011', required: false })
+  @IsOptional()
+  @IsMongoId({ message: 'hospitalId must be a valid MongoDB ObjectId' })
+  hospitalId?: string;
 
   @ApiProperty({ example: 'password123' })
   @IsString()

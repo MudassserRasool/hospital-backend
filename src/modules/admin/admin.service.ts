@@ -170,22 +170,71 @@ export class AdminService {
     console.log(params, '11111111111111111111111');
     console.log(query, '111111111111111111111111111111');
 
+    // Fetch owners first
     const owners = await this.userModel
       .find(query)
       .select('-password -refreshTokens')
-      .populate('hospitalId', 'name logo')
       .sort({ createdAt: -1 })
       .limit(params?.limit || 50)
       .skip(params?.skip || 0)
+      .lean()
       .exec();
+
+    // Collect valid hospitalIds (non-empty, non-null, valid ObjectId format)
+    const validHospitalIds = owners
+      .map((owner: any) => owner.hospitalId)
+      .filter((id: any) => {
+        if (!id || id === '') return false;
+        // Handle ObjectId objects
+        if (typeof id === 'object' && id.toString) {
+          const idStr = id.toString();
+          return (
+            idStr && idStr.length === 24 && /^[0-9a-fA-F]{24}$/.test(idStr)
+          );
+        }
+        // Handle string IDs
+        if (typeof id === 'string') {
+          return id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id);
+        }
+        return false;
+      })
+      .map((id: any) => (typeof id === 'object' ? id : id));
+
+    // Populate hospital data only for valid IDs
+    let hospitalMap: Map<string, any> = new Map();
+    if (validHospitalIds.length > 0) {
+      const hospitals = await this.hospitalModel
+        .find({ _id: { $in: validHospitalIds } })
+        .select('name logo')
+        .lean()
+        .exec();
+
+      hospitals.forEach((hospital: any) => {
+        hospitalMap.set(hospital._id.toString(), hospital);
+      });
+    }
+
+    // Attach hospital data to owners
+    const ownersWithHospitals = owners.map((owner: any) => {
+      if (owner.hospitalId) {
+        const hospitalIdStr =
+          typeof owner.hospitalId === 'object'
+            ? owner.hospitalId.toString()
+            : owner.hospitalId;
+        owner.hospitalId = hospitalMap.get(hospitalIdStr) || null;
+      } else {
+        owner.hospitalId = null;
+      }
+      return owner;
+    });
 
     console.log(query, '2222222222224222222222222d222222');
 
-    console.log(owners, '222222222222222222222222222222');
+    console.log(ownersWithHospitals, '222222222222222222222222222222');
 
     const total = await this.userModel.countDocuments(query);
 
-    return { owners, total };
+    return { owners: ownersWithHospitals, total };
   }
 
   async createOwner(data: any, createdBy: string) {
@@ -199,17 +248,24 @@ export class AdminService {
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
-    const owner = await this.userModel.create({
+    // Only set hospitalId if it's provided and not empty
+    const ownerData: any = {
       email: data.email,
       password: hashedPassword,
       firstName: data.firstName,
       lastName: data.lastName,
       role: 'owner',
       phone: data.phone,
-      hospitalId: data.hospitalId,
       isActive: true,
       isBlocked: false,
-    });
+    };
+
+    // Only include hospitalId if it's a valid non-empty string
+    if (data.hospitalId && data.hospitalId.trim() !== '') {
+      ownerData.hospitalId = data.hospitalId;
+    }
+
+    const owner = await this.userModel.create(ownerData);
 
     // Log action
     await this.createAuditLog({
