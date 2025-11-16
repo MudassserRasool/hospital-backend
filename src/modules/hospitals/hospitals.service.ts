@@ -212,4 +212,12 @@ export class HospitalsService {
       totalPatients: count,
     });
   }
+
+  async getMobilePackageId(id: string) {
+    const hospital = await this.hospitalModel.findOne({ mobilePackageId: id });
+    if (!hospital) {
+      throw new NotFoundException('Hospital not found');
+    }
+    return hospital;
+  }
 }

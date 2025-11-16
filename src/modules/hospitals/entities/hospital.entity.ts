@@ -106,6 +106,10 @@ export class Hospital {
   @Prop({ default: 0 })
   totalPatients?: number;
 
+  @Prop({ required: true })
+  mobilePackageId: string;
+  //  add index
+
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -116,3 +120,4 @@ export const HospitalSchema = SchemaFactory.createForClass(Hospital);
 HospitalSchema.index({ name: 1 });
 HospitalSchema.index({ ownerId: 1 });
 HospitalSchema.index({ 'location.latitude': 1, 'location.longitude': 1 });
+HospitalSchema.index({ mobilePackageId: 1 });

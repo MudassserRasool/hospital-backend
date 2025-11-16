@@ -1,6 +1,13 @@
-import { IsString, IsNotEmpty, IsObject, IsArray, IsOptional, ValidateNested, IsEmail, IsBoolean } from 'class-validator';
-import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 
 class AddressDto {
   @ApiProperty()
@@ -155,4 +162,10 @@ export class CreateHospitalDto {
   @IsArray()
   @IsOptional()
   facilities?: string[];
+
+  // mobile package id
+  @ApiProperty({ required: true })
+  @IsString()
+  @IsNotEmpty()
+  mobilePackageId: string;
 }

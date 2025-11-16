@@ -135,4 +135,16 @@ export class HospitalsController {
   remove(@Param('id') id: string) {
     return this.hospitalsService.remove(id);
   }
+
+  // get hospital mobile package id
+  // avoid any type of auth here packageId is only the security measure
+  @Get('mobile-package-id/:id')
+  @ApiOperation({ summary: 'Get hospital mobile package id' })
+  @ApiResponse({
+    status: 200,
+    description: 'Hospital mobile package id retrieved successfully',
+  })
+  getMobilePackageId(@Param('id') id: string) {
+    return this.hospitalsService.getMobilePackageId(id);
+  }
 }
