@@ -15,6 +15,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -138,6 +139,7 @@ export class HospitalsController {
 
   // get hospital mobile package id
   // avoid any type of auth here packageId is only the security measure
+  @Public()
   @Get('mobile-package-id/:id')
   @ApiOperation({ summary: 'Get hospital mobile package id' })
   @ApiResponse({
