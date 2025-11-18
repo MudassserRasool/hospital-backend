@@ -9,6 +9,7 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { ipAddress } from './common/utils/os';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -100,7 +101,9 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port);
 
-  console.log(`🚀 Application is running on: http://localhost:${port}/api`);
+  console.log(
+    `🚀 Application is running on: http://${ipAddress()}:${port}/api`,
+  );
   console.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
 }
 
