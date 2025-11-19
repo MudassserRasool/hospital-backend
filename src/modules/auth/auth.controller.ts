@@ -12,9 +12,11 @@ import { AuthService } from './auth.service';
 import { GenerateGestTokenDto } from './dto/generate-gest-token.dto';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { LoginCredentialsDto } from './dto/login-credentials.dto';
+import { OtpDTO } from './dto/otp.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterCredentialsDto } from './dto/register-credentials.dto';
 import { UpdateProfileDto } from './dto/update-auth.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -31,6 +33,35 @@ export class AuthController {
   @ApiResponse({ status: 409, description: 'User already exists' })
   async registerWithCredentials(@Body() dto: RegisterCredentialsDto) {
     return this.authService.registerWithCredentials(dto);
+  }
+
+  @Public()
+  @Post('otp/verify')
+  @ApiOperation({ summary: 'Verify auth api' })
+  @ApiResponse({ status: 200, description: 'User verified scessfully' })
+  @ApiResponse({ status: 401, description: 'Invalid otp, please verify again' })
+  async verifyAuthApi(@Body() dto: OtpDTO) {
+    return this.authService.authOtpVerification(dto.phone, dto.otp);
+  }
+
+  //  resend otp
+  @Public()
+  @Post('otp/resend')
+  @ApiOperation({ summary: 'Resend otp' })
+  @ApiResponse({ status: 200, description: 'OTP resent successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid phone number' })
+  async resendOtp(@Body() dto: OtpDTO) {
+    return this.authService.resendOtp(dto.phone);
+  }
+
+  // reset password
+  @Public()
+  @Patch('reset-password')
+  @ApiOperation({ summary: 'Reset password' })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid password' })
+  async resetPassword(@Body() dto: UpdatePasswordDto) {
+    return this.authService.updatePassword(dto.phone, dto.password, dto.otp);
   }
 
   @Public()

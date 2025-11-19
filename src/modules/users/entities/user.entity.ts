@@ -39,6 +39,10 @@ export class User {
   @Prop({ default: true })
   isActive: boolean;
 
+  // is verified
+  @Prop({ default: false })
+  isVerified: boolean;
+
   @Prop({ default: false })
   isBlocked: boolean;
 
@@ -70,6 +74,9 @@ export class User {
 
   @Prop({ type: [String], default: [] })
   deviceTokens?: string[]; // For push notifications (Expo push tokens)
+
+  @Prop()
+  otp?: string | number;
 
   createdAt?: Date;
   updatedAt?: Date;

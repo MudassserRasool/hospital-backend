@@ -57,6 +57,7 @@ import { UsersModule } from './modules/users/users.module';
 import { VitalsModule } from './modules/vitals/vitals.module';
 import { WalletsModule } from './modules/wallets/wallets.module';
 import { WorkHoursModule } from './modules/work-hours/work-hours.module';
+import { SmsService } from './common/service/sms/sms.service';
 
 @Module({
   imports: [
@@ -125,6 +126,6 @@ import { WorkHoursModule } from './modules/work-hours/work-hours.module';
     AuditLogsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, SmsService],
 })
 export class AppModule {}

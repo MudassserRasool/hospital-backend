@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
+import { SmsService } from 'src/common/service/sms/sms.service';
 import { UserRole } from '../../common/constants/roles.constant';
 import { HospitalsService } from '../hospitals/hospitals.service';
 import { User, UserDocument } from '../users/entities/user.entity';
@@ -24,6 +25,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private hospitalsService: HospitalsService,
+    private smsService: SmsService,
   ) {}
 
   // Register user with email/password (for Super Admin, Owner, Receptionist)
@@ -50,18 +52,15 @@ export class AuthService {
       isBlocked: false,
     });
 
-    // Generate tokens
-    const tokens = await this.generateTokens(user);
+    // send random 4 digit otp on phone number
+    const otp = Math.floor(1000 + Math.random() * 9000);
+    await this.smsService.sendOtp(dto.phone, otp);
 
-    // Save refresh token
-    await this.saveRefreshToken(
-      (user._id as any).toString(),
-      tokens.refreshToken,
-    );
+    user.otp = otp;
+    await user.save();
 
     return {
-      user: this.sanitizeUser(user),
-      ...tokens,
+      message: 'OTP sent successfully',
     };
   }
 
@@ -176,6 +175,81 @@ export class AuthService {
     return {
       user: this.sanitizeUser(user),
       ...tokens,
+    };
+  }
+
+  // verify otp and genrate token for user
+  async authOtpVerification(phone: string, otp: string | number) {
+    const user = await this.userModel.findOne({ phone });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    if (user.otp !== otp) {
+      throw new UnauthorizedException('Invalid otp');
+    }
+    user.isVerified = true;
+    await user.save();
+    const tokens = await this.generateTokens(user);
+    await this.saveRefreshToken(
+      (user._id as any).toString(),
+      tokens.refreshToken,
+    );
+    return {
+      user: this.sanitizeUser(user),
+      ...tokens,
+    };
+  }
+
+  // check if allow to send otp because of rate limit
+  private async checkIfAllowToResendOtp(phone: string) {
+    const user = await this.userModel.findOne({ phone });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    if (user.isVerified) {
+      throw new UnauthorizedException('User is already verified');
+    }
+    if (
+      user.createdAt &&
+      new Date(user.createdAt).getTime() + 1000 * 60 * 60 * 0.5 > Date.now()
+    ) {
+      throw new UnauthorizedException('You can only send OTP once per day');
+    }
+    return true;
+  }
+
+  async resendOtp(phone: string) {
+    const user = await this.userModel.findOne({ phone });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    const isAllowed = await this.checkIfAllowToResendOtp(phone);
+    if (!isAllowed) {
+      throw new UnauthorizedException('You can only send OTP once per day');
+    }
+    const otp = Math.floor(1000 + Math.random() * 9000);
+    await this.smsService.sendOtp(phone, otp);
+
+    user.otp = otp;
+    await user.save();
+    return { message: 'OTP resent successfully' };
+  }
+
+  async updatePassword(phone: string, password: string, otp: string | number) {
+    const user = await this.userModel.findOne({ phone });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    if (user.otp !== otp) {
+      throw new UnauthorizedException('Invalid otp');
+    }
+    user.password = await bcrypt.hash(password, 10);
+    user.otp = undefined as any;
+    await user.save();
+
+    return {
+      message: 'Password updated successfully, please login with new password',
+      user: this.sanitizeUser(user),
     };
   }
 
