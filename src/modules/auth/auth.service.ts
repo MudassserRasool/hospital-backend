@@ -184,10 +184,30 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    if (user.otp !== otp) {
-      throw new UnauthorizedException('Invalid otp');
+
+    // Check if OTP exists
+    if (!user.otp) {
+      throw new UnauthorizedException('No OTP found. Please request a new OTP');
     }
+
+    // Check if OTP matches
+    if (user.otp !== otp) {
+      throw new UnauthorizedException('Invalid OTP');
+    }
+
+    // Check if OTP has expired (15 minutes)
+    // Using updatedAt as proxy for when OTP was set
+    if (
+      user.updatedAt &&
+      new Date(user.updatedAt).getTime() + 1000 * 60 * 15 < Date.now()
+    ) {
+      throw new UnauthorizedException(
+        'OTP has expired. Please request a new OTP',
+      );
+    }
+
     user.isVerified = true;
+    user.otp = undefined as any; // Clear OTP after successful verification
     await user.save();
     const tokens = await this.generateTokens(user);
     await this.saveRefreshToken(
@@ -209,24 +229,26 @@ export class AuthService {
     if (user.isVerified) {
       throw new UnauthorizedException('User is already verified');
     }
+    // Check if OTP was sent within the last 30 minutes (rate limiting)
+    // Using updatedAt as proxy for when OTP was last sent/updated
     if (
-      user.createdAt &&
-      new Date(user.createdAt).getTime() + 1000 * 60 * 60 * 0.5 > Date.now()
+      user.updatedAt &&
+      new Date(user.updatedAt).getTime() + 1000 * 60 * 30 > Date.now()
     ) {
-      throw new UnauthorizedException('You can only send OTP once per day');
+      throw new UnauthorizedException(
+        'Please wait 30 minutes before requesting a new OTP',
+      );
     }
     return true;
   }
 
   async resendOtp(phone: string) {
+    // checkIfAllowToResendOtp will throw if user not found or not allowed
+    await this.checkIfAllowToResendOtp(phone);
+
+    // Fetch user to update OTP (checkIfAllowToResendOtp already validated user exists)
     const user = await this.userModel.findOne({ phone });
-    if (!user) {
-      throw new UnauthorizedException('User not found');
-    }
-    const isAllowed = await this.checkIfAllowToResendOtp(phone);
-    if (!isAllowed) {
-      throw new UnauthorizedException('You can only send OTP once per day');
-    }
+
     const otp = Math.floor(1000 + Math.random() * 9000);
     await this.smsService.sendOtp(phone, otp);
 
@@ -240,9 +262,38 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    if (user.otp !== otp) {
-      throw new UnauthorizedException('Invalid otp');
+
+    // Check if user is active
+    if (!user.isActive) {
+      throw new UnauthorizedException('Account is inactive');
     }
+
+    // Check if user is blocked
+    if (user.isBlocked) {
+      throw new UnauthorizedException('Account is blocked');
+    }
+
+    // Check if OTP exists
+    if (!user.otp) {
+      throw new UnauthorizedException('No OTP found. Please request a new OTP');
+    }
+
+    // Check if OTP matches
+    if (user.otp !== otp) {
+      throw new UnauthorizedException('Invalid OTP');
+    }
+
+    // Check if OTP has expired (15 minutes)
+    // Using updatedAt as proxy for when OTP was set
+    if (
+      user.updatedAt &&
+      new Date(user.updatedAt).getTime() + 1000 * 60 * 15 < Date.now()
+    ) {
+      throw new UnauthorizedException(
+        'OTP has expired. Please request a new OTP',
+      );
+    }
+
     user.password = await bcrypt.hash(password, 10);
     user.otp = undefined as any;
     await user.save();
