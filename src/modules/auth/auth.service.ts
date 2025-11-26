@@ -182,8 +182,14 @@ export class AuthService {
   }
 
   // verify otp and genrate token for user
-  async authOtpVerification(phone: string, otp: string | number) {
-    const user = await this.userModel.findOne({ phone });
+  async authOtpVerification(
+    phoneOrEmail: string,
+    otp: string | number,
+    isEmail: boolean = false,
+  ) {
+    // Find user by phone or email
+    const query = isEmail ? { email: phoneOrEmail } : { phone: phoneOrEmail };
+    const user = await this.userModel.findOne(query);
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
@@ -226,8 +232,13 @@ export class AuthService {
   }
 
   // check if allow to send otp because of rate limit
-  private async checkIfAllowToResendOtp(phone: string) {
-    const user = await this.userModel.findOne({ phone });
+  private async checkIfAllowToResendOtp(
+    phoneOrEmail: string,
+    isEmail: boolean = false,
+  ) {
+    // Find user by phone or email
+    const query = isEmail ? { email: phoneOrEmail } : { phone: phoneOrEmail };
+    const user = await this.userModel.findOne(query);
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
@@ -247,20 +258,30 @@ export class AuthService {
     return true;
   }
 
-  async resendOtp(phone: string) {
+  async resendOtp(phoneOrEmail: string, isEmail: boolean = false) {
     // checkIfAllowToResendOtp will throw if user not found or not allowed
-    await this.checkIfAllowToResendOtp(phone);
+    await this.checkIfAllowToResendOtp(phoneOrEmail, isEmail);
 
-    // Fetch user to update OTP (checkIfAllowToResendOtp already validated user exists)
-    const user = await this.userModel.findOne({ phone });
+    // Find user by phone or email
+    const query = isEmail ? { email: phoneOrEmail } : { phone: phoneOrEmail };
+    const user = await this.userModel.findOne(query);
 
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
 
     const otp = Math.floor(1000 + Math.random() * 9000);
-    // await this.smsService.sendOtp(phone, otp);
-    await this.emailService.sendOtp(user.email, otp);
+
+    // Send OTP via SMS if phone is provided, otherwise via email
+    if (isEmail) {
+      await this.emailService.sendOtp(phoneOrEmail, otp);
+    } else {
+      // await this.smsService.sendOtp(phoneOrEmail, otp);
+      // If SMS service is not available, send via email as fallback
+      if (user.email) {
+        await this.emailService.sendOtp(user.email, otp);
+      }
+    }
 
     user.otp = otp.toString();
     await user.save();

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -41,7 +49,14 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User verified scessfully' })
   @ApiResponse({ status: 401, description: 'Invalid otp, please verify again' })
   async verifyAuthApi(@Body() dto: OtpDTO) {
-    return this.authService.authOtpVerification(dto.phone, dto.otp);
+    // Determine if phone or email was provided
+    if (!dto.phone && !dto.email) {
+      throw new BadRequestException('Either phone or email must be provided');
+    }
+    const phoneOrEmail: string = dto.phone || dto.email || '';
+    const isEmail = !!dto.email;
+    console.log('11****', dto);
+    return this.authService.authOtpVerification(phoneOrEmail, dto.otp, isEmail);
   }
 
   //  resend otp
@@ -49,9 +64,15 @@ export class AuthController {
   @Post('otp/resend')
   @ApiOperation({ summary: 'Resend otp' })
   @ApiResponse({ status: 200, description: 'OTP resent successfully' })
-  @ApiResponse({ status: 401, description: 'Invalid phone number' })
+  @ApiResponse({ status: 401, description: 'Invalid phone number or email' })
   async resendOtp(@Body() dto: OtpDTO) {
-    return this.authService.resendOtp(dto.phone);
+    // Determine if phone or email was provided
+    if (!dto.phone && !dto.email) {
+      throw new BadRequestException('Either phone or email must be provided');
+    }
+    const phoneOrEmail: string = dto.phone || dto.email || '';
+    const isEmail = !!dto.email;
+    return this.authService.resendOtp(phoneOrEmail, isEmail);
   }
 
   // reset password
