@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
+import { EmailService } from 'src/common/service/email/email.service';
 import { SmsService } from 'src/common/service/sms/sms.service';
 import { UserRole } from '../../common/constants/roles.constant';
 import { HospitalsService } from '../hospitals/hospitals.service';
@@ -26,6 +27,7 @@ export class AuthService {
     private configService: ConfigService,
     private hospitalsService: HospitalsService,
     private smsService: SmsService,
+    private emailService: EmailService,
   ) {}
 
   // Register user with email/password (for Super Admin, Owner, Receptionist)
@@ -54,7 +56,8 @@ export class AuthService {
 
     // send random 4 digit otp on phone number
     const otp = Math.floor(1000 + Math.random() * 9000);
-    await this.smsService.sendOtp(dto.phone, otp);
+    // await this.smsService.sendOtp(dto.phone, otp);
+    await this.emailService.sendOtp(dto.email, otp);
 
     user.otp = otp;
     await user.save();
@@ -249,8 +252,13 @@ export class AuthService {
     // Fetch user to update OTP (checkIfAllowToResendOtp already validated user exists)
     const user = await this.userModel.findOne({ phone });
 
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
     const otp = Math.floor(1000 + Math.random() * 9000);
-    await this.smsService.sendOtp(phone, otp);
+    // await this.smsService.sendOtp(phone, otp);
+    await this.emailService.sendOtp(user.email, otp);
 
     user.otp = otp;
     await user.save();
