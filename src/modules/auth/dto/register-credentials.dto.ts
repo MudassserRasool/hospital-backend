@@ -1,5 +1,13 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsEnum, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
+import ROLES from 'src/common/constants/roles.constant';
 
 export class RegisterCredentialsDto {
   @ApiProperty({ example: 'admin@hospital.com' })
@@ -23,8 +31,8 @@ export class RegisterCredentialsDto {
   @IsNotEmpty()
   lastName: string;
 
-  @ApiProperty({ enum: ['super_admin', 'owner', 'receptionist'] })
-  @IsEnum(['super_admin', 'owner', 'receptionist'])
+  @ApiProperty({ enum: ROLES })
+  @IsEnum(ROLES)
   @IsNotEmpty()
   role: string;
 
@@ -38,4 +46,3 @@ export class RegisterCredentialsDto {
   @IsOptional()
   hospitalId?: string;
 }
-
