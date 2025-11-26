@@ -75,8 +75,8 @@ export class User {
   @Prop({ type: [String], default: [] })
   deviceTokens?: string[]; // For push notifications (Expo push tokens)
 
-  @Prop()
-  otp?: string | number;
+  @Prop({ type: String })
+  otp?: string;
 
   createdAt?: Date;
   updatedAt?: Date;

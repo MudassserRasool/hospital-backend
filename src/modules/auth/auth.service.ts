@@ -59,7 +59,7 @@ export class AuthService {
     // await this.smsService.sendOtp(dto.phone, otp);
     await this.emailService.sendOtp(dto.email, otp);
 
-    user.otp = otp;
+    user.otp = otp.toString();
     await user.save();
 
     return {
@@ -193,8 +193,10 @@ export class AuthService {
       throw new UnauthorizedException('No OTP found. Please request a new OTP');
     }
 
+    const providedOtp = String(otp);
+
     // Check if OTP matches
-    if (user.otp !== otp) {
+    if (user.otp !== providedOtp) {
       throw new UnauthorizedException('Invalid OTP');
     }
 
@@ -260,7 +262,7 @@ export class AuthService {
     // await this.smsService.sendOtp(phone, otp);
     await this.emailService.sendOtp(user.email, otp);
 
-    user.otp = otp;
+    user.otp = otp.toString();
     await user.save();
     return { message: 'OTP resent successfully' };
   }
@@ -286,8 +288,10 @@ export class AuthService {
       throw new UnauthorizedException('No OTP found. Please request a new OTP');
     }
 
+    const providedOtp = String(otp);
+
     // Check if OTP matches
-    if (user.otp !== otp) {
+    if (user.otp !== providedOtp) {
       throw new UnauthorizedException('Invalid OTP');
     }
 

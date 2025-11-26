@@ -24,6 +24,8 @@ import { PaymentModule } from './integrations/payment/payment.module';
 import { FileUploadModule } from './common/service/file-upload/file-upload.module';
 
 // Feature Modules
+import emailConfig from './config/email.config';
+import smsConfig from './config/sms.config';
 import { AdminModule } from './modules/admin/admin.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
@@ -57,14 +59,13 @@ import { UsersModule } from './modules/users/users.module';
 import { VitalsModule } from './modules/vitals/vitals.module';
 import { WalletsModule } from './modules/wallets/wallets.module';
 import { WorkHoursModule } from './modules/work-hours/work-hours.module';
-import { SmsService } from './common/service/sms/sms.service';
 
 @Module({
   imports: [
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig],
+      load: [appConfig, databaseConfig, jwtConfig, smsConfig, emailConfig],
       envFilePath: '.env',
     }),
 
@@ -126,6 +127,6 @@ import { SmsService } from './common/service/sms/sms.service';
     AuditLogsModule,
   ],
   controllers: [AppController],
-  providers: [AppService, SmsService],
+  providers: [AppService],
 })
 export class AppModule {}
