@@ -49,13 +49,15 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User verified scessfully' })
   @ApiResponse({ status: 401, description: 'Invalid otp, please verify again' })
   async verifyAuthApi(@Body() dto: OtpDTO) {
-    // Determine if phone or email was provided
-    if (!dto.phone && !dto.email) {
+    // Determine if phone or email was provided (handle empty strings)
+    const hasPhone = dto.phone && dto.phone.trim().length > 0;
+    const hasEmail = dto.email && dto.email.trim().length > 0;
+
+    if (!hasPhone && !hasEmail) {
       throw new BadRequestException('Either phone or email must be provided');
     }
-    const phoneOrEmail: string = dto.phone || dto.email || '';
-    const isEmail = !!dto.email;
-    console.log('11****', dto);
+    const phoneOrEmail: string = (hasPhone ? dto.phone! : dto.email!) || '';
+    const isEmail = !!hasEmail;
     return this.authService.authOtpVerification(phoneOrEmail, dto.otp, isEmail);
   }
 
@@ -66,12 +68,15 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'OTP resent successfully' })
   @ApiResponse({ status: 401, description: 'Invalid phone number or email' })
   async resendOtp(@Body() dto: OtpDTO) {
-    // Determine if phone or email was provided
-    if (!dto.phone && !dto.email) {
+    // Determine if phone or email was provided (handle empty strings)
+    const hasPhone = dto.phone && dto.phone.trim().length > 0;
+    const hasEmail = dto.email && dto.email.trim().length > 0;
+
+    if (!hasPhone && !hasEmail) {
       throw new BadRequestException('Either phone or email must be provided');
     }
-    const phoneOrEmail: string = dto.phone || dto.email || '';
-    const isEmail = !!dto.email;
+    const phoneOrEmail: string = (hasPhone ? dto.phone! : dto.email!) || '';
+    const isEmail = !!hasEmail;
     return this.authService.resendOtp(phoneOrEmail, isEmail);
   }
 

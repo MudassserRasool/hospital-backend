@@ -1,8 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsNotEmpty,
   IsPhoneNumber,
+  IsString,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -15,6 +17,8 @@ export class OtpDTO {
   phone?: string;
 
   @ApiProperty({ example: '1234' })
+  @Transform(({ value }) => String(value))
+  @IsString()
   @IsNotEmpty({ message: 'OTP is required' })
   @MinLength(4)
   otp: string | number;
