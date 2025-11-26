@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { AVATAR_UTL, GENDER_TYPES_ARRAY } from 'src/common/constants';
 import ROLES from 'src/common/constants/roles.constant';
 
 export type UserDocument = User & Document;
@@ -20,6 +21,22 @@ export class User {
     enum: ROLES,
   })
   role: string;
+
+  // gender
+  @Prop({ required: false, enum: GENDER_TYPES_ARRAY })
+  gender?: string;
+
+  @Prop({
+    required: false,
+    default: function () {
+      // use 'this' to refer to the document instance
+      if (this.gender === 'female') {
+        return AVATAR_UTL(47);
+      }
+      return AVATAR_UTL(12);
+    },
+  })
+  avatar?: string;
 
   @Prop({ required: false })
   firstName: string;
