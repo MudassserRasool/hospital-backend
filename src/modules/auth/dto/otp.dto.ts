@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsEmail,
   IsNotEmpty,
   IsPhoneNumber,
   IsString,
@@ -17,4 +18,9 @@ export class OtpDTO {
   @IsNotEmpty()
   @MinLength(4)
   otp: string | number;
+
+  @ApiProperty({ example: 'example@gmail.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
 }
