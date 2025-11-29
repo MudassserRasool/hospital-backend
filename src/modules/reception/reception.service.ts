@@ -11,6 +11,7 @@ import {
   AppointmentDocument,
 } from '../appointments/entities/appointment.entity';
 import { Patient, PatientDocument } from '../patients/entities/patient.entity';
+import { ProfilesService } from '../profiles/profiles.service';
 import { Receipt, ReceiptDocument } from '../receipts/entities/receipt.entity';
 import { User, UserDocument } from '../users/entities/user.entity';
 
@@ -22,6 +23,7 @@ export class ReceptionService {
     @InjectModel(Patient.name) private patientModel: Model<PatientDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Receipt.name) private receiptModel: Model<ReceiptDocument>,
+    private profilesService: ProfilesService,
   ) {}
 
   // ========== APPOINTMENT MANAGEMENT ==========
@@ -440,12 +442,19 @@ export class ReceptionService {
       phone: data.phone,
       role: 'doctor',
       hospitalId,
-      specialization: data.specialization,
-      licenseNumber: data.licenseNumber,
-      experience: data.experience,
-      timing: data.timing || [],
       isActive: true,
     });
+
+    // Create profile with doctor-specific fields
+    if (data.specialization || data.licenseNumber || data.experience || data.timing) {
+      await this.profilesService.create((doctor._id as any).toString(), {
+        role: 'doctor',
+        specialization: data.specialization,
+        licenseNumber: data.licenseNumber,
+        experience: data.experience,
+        timing: data.timing || [],
+      });
+    }
 
     return {
       doctor: doctor.toObject(),
@@ -455,7 +464,7 @@ export class ReceptionService {
 
   async updateDoctor(id: string, data: any) {
     const doctor = await this.userModel
-      .findByIdAndUpdate(id, data, { new: true })
+      .findById(id)
       .select('-password -refreshTokens')
       .exec();
 
@@ -463,7 +472,47 @@ export class ReceptionService {
       throw new NotFoundException('Doctor not found');
     }
 
-    return doctor;
+    // Separate user fields from profile fields
+    const userFields: any = {};
+    const profileFields: any = {};
+
+    if (data.firstName !== undefined) userFields.firstName = data.firstName;
+    if (data.lastName !== undefined) userFields.lastName = data.lastName;
+    if (data.phone !== undefined) userFields.phone = data.phone;
+    if (data.email !== undefined) userFields.email = data.email;
+
+    if (data.specialization !== undefined) profileFields.specialization = data.specialization;
+    if (data.licenseNumber !== undefined) profileFields.licenseNumber = data.licenseNumber;
+    if (data.experience !== undefined) profileFields.experience = data.experience;
+    if (data.timing !== undefined) profileFields.timing = data.timing;
+
+    // Update user if there are user fields
+    if (Object.keys(userFields).length > 0) {
+      await this.userModel.findByIdAndUpdate(id, userFields);
+    }
+
+    // Update or create profile if there are profile fields
+    if (Object.keys(profileFields).length > 0) {
+      try {
+        await this.profilesService.updateByUserId(id, profileFields);
+      } catch (error) {
+        // Profile doesn't exist, create it
+        if (error instanceof NotFoundException) {
+          await this.profilesService.create(id, {
+            role: doctor.role,
+            ...profileFields,
+          });
+        }
+      }
+    }
+
+    // Return updated doctor with profile
+    const updatedDoctor = await this.userModel
+      .findById(id)
+      .select('-password -refreshTokens')
+      .exec();
+
+    return updatedDoctor;
   }
 
   async deleteDoctor(id: string) {

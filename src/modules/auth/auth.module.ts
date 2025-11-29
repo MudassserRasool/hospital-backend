@@ -5,6 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { PassportModule } from '@nestjs/passport';
 import { CommonServicesModule } from 'src/common/service/common-services.module';
 import { HospitalsModule } from '../hospitals/hospitals.module';
+import { ProfilesModule } from '../profiles/profiles.module';
 import { User, UserSchema } from '../users/entities/user.entity';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -15,6 +16,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   imports: [
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     HospitalsModule,
+    ProfilesModule,
     CommonServicesModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({

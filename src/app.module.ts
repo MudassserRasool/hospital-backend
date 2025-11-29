@@ -43,6 +43,7 @@ import { OwnersModule } from './modules/owners/owners.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
+import { ProfilesModule } from './modules/profiles/profiles.module';
 import { ReceiptTemplatesModule } from './modules/receipt-templates/receipt-templates.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { ReceptionModule } from './modules/reception/reception.module';
@@ -95,6 +96,7 @@ import { WorkHoursModule } from './modules/work-hours/work-hours.module';
     AuthModule,
     AdminModule,
     UsersModule,
+    ProfilesModule,
     PatientsModule,
     StaffModule,
     OwnersModule,

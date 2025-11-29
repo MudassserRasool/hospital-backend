@@ -13,6 +13,7 @@ import { EmailService } from 'src/common/service/email/email.service';
 import { SmsService } from 'src/common/service/sms/sms.service';
 import { UserRole } from '../../common/constants/roles.constant';
 import { HospitalsService } from '../hospitals/hospitals.service';
+import { ProfilesService } from '../profiles/profiles.service';
 import { User, UserDocument } from '../users/entities/user.entity';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { LoginCredentialsDto } from './dto/login-credentials.dto';
@@ -26,6 +27,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private hospitalsService: HospitalsService,
+    private profilesService: ProfilesService,
     private smsService: SmsService,
     private emailService: EmailService,
   ) {}
@@ -383,7 +385,7 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
-  // Get user profile
+  // Get user profile (with profile data if exists)
   async getProfile(userId: string) {
     const user = await this.userModel
       .findById(userId)
@@ -391,7 +393,29 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    return this.sanitizeUser(user);
+
+    const sanitizedUser = this.sanitizeUser(user);
+
+    // Get profile data if exists
+    try {
+      const profile = await this.profilesService.findByUserId(userId);
+      if (profile) {
+        // Merge profile data with user data
+        const profileObj = profile.toObject ? profile.toObject() : profile;
+        return {
+          ...sanitizedUser,
+          ...profileObj,
+          // Keep user fields that might be overridden
+          email: sanitizedUser.email,
+          role: sanitizedUser.role,
+          hospitalId: sanitizedUser.hospitalId,
+        };
+      }
+    } catch (error) {
+      // Profile doesn't exist, return just user data
+    }
+
+    return sanitizedUser;
   }
 
   // Update user profile

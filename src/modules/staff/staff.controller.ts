@@ -17,7 +17,7 @@ export class StaffController {
   @Roles('doctor', 'nurse', 'staff', 'receptionist')
   @ApiOperation({ summary: 'Get my staff profile' })
   @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
-  getMyProfile(@CurrentUser() user: any) {
+  getMyProfile(@CurrentUser() user: any): Promise<any> {
     return this.staffService.getStaffProfile(user.id);
   }
 
@@ -25,7 +25,7 @@ export class StaffController {
   @Roles('doctor', 'nurse', 'staff', 'receptionist')
   @ApiOperation({ summary: 'Update my profile' })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
-  updateMyProfile(@CurrentUser() user: any, @Body() updateData: any) {
+  updateMyProfile(@CurrentUser() user: any, @Body() updateData: any): Promise<any> {
     return this.staffService.updateStaffProfile(user.id, updateData);
   }
 
@@ -57,7 +57,7 @@ export class StaffController {
   @Roles('owner', 'super_admin', 'receptionist')
   @ApiOperation({ summary: 'Get staff details' })
   @ApiResponse({ status: 200, description: 'Staff details retrieved successfully' })
-  getStaffProfile(@Param('id') id: string) {
+  getStaffProfile(@Param('id') id: string): Promise<any> {
     return this.staffService.getStaffProfile(id);
   }
 

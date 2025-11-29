@@ -102,6 +102,19 @@ export class PatientsService {
     return patient;
   }
 
+  async updateByUserId(userId: string, updatePatientDto: UpdatePatientDto) {
+    const patient = await this.patientModel
+      .findOneAndUpdate({ userId }, updatePatientDto, { new: true })
+      .populate('userId', 'firstName lastName email phone profilePicture')
+      .exec();
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
+
+    return patient;
+  }
+
   async remove(id: string) {
     const patient = await this.patientModel.findByIdAndDelete(id).exec();
 

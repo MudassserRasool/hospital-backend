@@ -51,6 +51,18 @@ export class PatientsController {
     return this.patientsService.findByUserId(user.id);
   }
 
+  @Patch('me')
+  @Roles('patient')
+  @ApiOperation({ summary: 'Update my patient profile' })
+  @ApiResponse({ status: 200, description: 'Patient profile updated successfully' })
+  @ApiResponse({ status: 404, description: 'Patient not found' })
+  updateMyProfile(
+    @CurrentUser() user: any,
+    @Body() updatePatientDto: UpdatePatientDto,
+  ) {
+    return this.patientsService.updateByUserId(user.id, updatePatientDto);
+  }
+
   // Get paitent by phone number
   @Get('phone/:phone')
   @ApiOperation({ summary: 'Get patient by phone number' })

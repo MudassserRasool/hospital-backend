@@ -26,6 +26,15 @@ export class User {
   @Prop({ required: false, enum: GENDER_TYPES_ARRAY })
   gender?: string;
 
+  @Prop({ required: false })
+  firstName: string;
+
+  @Prop({ required: false })
+  lastName: string;
+
+  @Prop()
+  phone?: string;
+
   @Prop({
     required: false,
     default: function () {
@@ -36,18 +45,6 @@ export class User {
       return AVATAR_UTL(12);
     },
   })
-  avatar?: string;
-
-  @Prop({ required: false })
-  firstName: string;
-
-  @Prop({ required: false })
-  lastName: string;
-
-  @Prop()
-  phone?: string;
-
-  @Prop()
   profilePicture?: string;
 
   @Prop({ type: Types.ObjectId, ref: 'Hospital' })
@@ -74,17 +71,6 @@ export class User {
 
   @Prop({ type: [String], select: false })
   refreshTokens?: string[];
-  @Prop()
-  experience?: string;
-
-  @Prop()
-  licenseNumber?: string;
-
-  @Prop()
-  specialization?: string;
-
-  @Prop({ type: [Date], default: [] })
-  timing?: Date[];
 
   @Prop()
   lastLoginAt?: Date;

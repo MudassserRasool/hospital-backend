@@ -4,6 +4,7 @@ import { ReceptionController } from './reception.controller';
 import { ReceptionService } from './reception.service';
 import { Appointment, AppointmentSchema } from '../appointments/entities/appointment.entity';
 import { Patient, PatientSchema } from '../patients/entities/patient.entity';
+import { ProfilesModule } from '../profiles/profiles.module';
 import { User, UserSchema } from '../users/entities/user.entity';
 import { Receipt, ReceiptSchema } from '../receipts/entities/receipt.entity';
 
@@ -15,6 +16,7 @@ import { Receipt, ReceiptSchema } from '../receipts/entities/receipt.entity';
       { name: User.name, schema: UserSchema },
       { name: Receipt.name, schema: ReceiptSchema },
     ]),
+    ProfilesModule,
   ],
   controllers: [ReceptionController],
   providers: [ReceptionService],
