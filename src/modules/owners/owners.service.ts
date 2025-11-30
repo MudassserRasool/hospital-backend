@@ -7,6 +7,7 @@ import {
 } from '../hospitals/entities/hospital.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { User, UserDocument } from '../users/entities/user.entity';
+import { UpdateOwnerDto } from './dto/update-owner.dto';
 
 @Injectable()
 export class OwnersService {
@@ -21,6 +22,26 @@ export class OwnersService {
   async getOwnerProfile(userId: string) {
     const owner = await this.userModel
       .findById(userId)
+      .select('-password -refreshTokens')
+      .populate('hospitalId', 'name logo')
+      .exec();
+
+    if (!owner) {
+      throw new NotFoundException('Owner not found');
+    }
+
+    return owner;
+  }
+
+  /**
+   * Update owner profile
+   */
+  async updateOwnerProfile(userId: string, updateData: UpdateOwnerDto) {
+    const owner = await this.userModel
+      .findByIdAndUpdate(userId, updateData, {
+        new: true,
+        select: '-password -refreshTokens',
+      })
       .populate('hospitalId', 'name logo')
       .exec();
 

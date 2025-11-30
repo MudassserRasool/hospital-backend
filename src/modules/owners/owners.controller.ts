@@ -21,6 +21,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { OwnersService } from './owners.service';
+import { UpdateOwnerDto } from './dto/update-owner.dto';
 
 @ApiTags('Owners')
 @ApiBearerAuth('JWT-auth')
@@ -38,6 +39,19 @@ export class OwnersController {
   })
   getOwnerProfile(@CurrentUser() user: any) {
     return this.ownersService.getOwnerProfile(user.id);
+  }
+
+  @Patch('me')
+  @ApiOperation({ summary: 'Update owner profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Owner profile updated successfully',
+  })
+  updateOwnerProfile(
+    @CurrentUser() user: any,
+    @Body() updateData: UpdateOwnerDto,
+  ) {
+    return this.ownersService.updateOwnerProfile(user.id, updateData);
   }
 
   @Get('hospital')

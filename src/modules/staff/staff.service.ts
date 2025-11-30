@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ProfilesService } from '../profiles/profiles.service';
 import { User, UserDocument } from '../users/entities/user.entity';
+import { UpdateStaffDto } from './dto/update-staff.dto';
 
 @Injectable()
 export class StaffService {
@@ -51,7 +52,7 @@ export class StaffService {
   /**
    * Update staff profile
    */
-  async updateStaffProfile(staffId: string, updateData: any): Promise<any> {
+  async updateStaffProfile(staffId: string, updateData: UpdateStaffDto): Promise<any> {
     const staff = await this.userModel
       .findById(staffId)
       .select('-password -refreshTokens')
@@ -72,12 +73,19 @@ export class StaffService {
     if (updateData.profilePicture !== undefined) userFields.profilePicture = updateData.profilePicture;
 
     // Profile fields
+    if (updateData.dateOfBirth !== undefined) {
+      profileFields.dateOfBirth = new Date(updateData.dateOfBirth);
+    }
+    if (updateData.gender !== undefined) profileFields.gender = updateData.gender;
     if (updateData.specialization !== undefined) profileFields.specialization = updateData.specialization;
     if (updateData.licenseNumber !== undefined) profileFields.licenseNumber = updateData.licenseNumber;
     if (updateData.experience !== undefined) profileFields.experience = updateData.experience;
-    if (updateData.timing !== undefined) profileFields.timing = updateData.timing;
-    if (updateData.dateOfBirth !== undefined) profileFields.dateOfBirth = updateData.dateOfBirth;
-    if (updateData.gender !== undefined) profileFields.gender = updateData.gender;
+    if (updateData.timing !== undefined) {
+      // Convert string array to Date array if needed
+      profileFields.timing = Array.isArray(updateData.timing)
+        ? updateData.timing.map((t) => (typeof t === 'string' ? new Date(t) : t))
+        : updateData.timing;
+    }
 
     // Update user if there are user fields
     if (Object.keys(userFields).length > 0) {

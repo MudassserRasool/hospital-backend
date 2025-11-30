@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UpdateStaffDto } from './dto/update-staff.dto';
 
 @ApiTags('Staff')
 @ApiBearerAuth('JWT-auth')
@@ -25,7 +26,11 @@ export class StaffController {
   @Roles('doctor', 'nurse', 'staff', 'receptionist')
   @ApiOperation({ summary: 'Update my profile' })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
-  updateMyProfile(@CurrentUser() user: any, @Body() updateData: any): Promise<any> {
+  @ApiResponse({ status: 404, description: 'Staff not found' })
+  updateMyProfile(
+    @CurrentUser() user: any,
+    @Body() updateData: UpdateStaffDto,
+  ): Promise<any> {
     return this.staffService.updateStaffProfile(user.id, updateData);
   }
 
