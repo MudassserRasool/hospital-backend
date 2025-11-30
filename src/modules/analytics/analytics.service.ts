@@ -5,16 +5,16 @@ import {
   Appointment,
   AppointmentDocument,
 } from '../appointments/entities/appointment.entity';
-import { Patient, PatientDocument } from '../patients/entities/patient.entity';
 import { Payment, PaymentDocument } from '../payments/entities/payment.entity';
+import { ProfilesService } from '../profiles/profiles.service';
 
 @Injectable()
 export class AnalyticsService {
   constructor(
     @InjectModel(Appointment.name)
     private appointmentModel: Model<AppointmentDocument>,
-    @InjectModel(Patient.name) private patientModel: Model<PatientDocument>,
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
+    private profilesService: ProfilesService,
   ) {}
 
   async getDashboardStats(hospitalId: string) {
@@ -35,7 +35,7 @@ export class AnalyticsService {
         hospitalId,
         date: { $gte: today },
       }),
-      this.patientModel.countDocuments({}),
+      this.profilesService.findAll({ role: 'patient' }).then(profiles => profiles.length),
       this.paymentModel.aggregate([
         { $match: { status: 'completed' } },
         { $group: { _id: null, total: { $sum: '$amount' } } },

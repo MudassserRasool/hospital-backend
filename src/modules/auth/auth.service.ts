@@ -56,6 +56,9 @@ export class AuthService {
       isBlocked: false,
     });
 
+    // Auto-create basic profile
+    await this.ensureProfileExists((user._id as any).toString(), dto.role, dto.hospitalId);
+
     // send random 4 digit otp on phone number
     const otp = Math.floor(1000 + Math.random() * 9000);
     // await this.smsService.sendOtp(dto.phone, otp);
@@ -156,6 +159,9 @@ export class AuthService {
         isBlocked: false,
         lastLoginAt: new Date(),
       });
+
+      // Auto-create basic profile for new users
+      await this.ensureProfileExists((user._id as any).toString(), dto.role, dto.hospitalId);
     }
 
     // Check if user is active
@@ -222,6 +228,10 @@ export class AuthService {
     user.isVerified = true;
     user.otp = undefined as any; // Clear OTP after successful verification
     await user.save();
+
+    // Ensure profile exists after verification
+    await this.ensureProfileExists((user._id as any).toString(), user.role, user.hospitalId?.toString());
+
     const tokens = await this.generateTokens(user);
     await this.saveRefreshToken(
       (user._id as any).toString(),
@@ -427,6 +437,28 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
     return this.sanitizeUser(user);
+  }
+
+  // Ensure profile exists for a user (creates basic profile if doesn't exist)
+  private async ensureProfileExists(
+    userId: string,
+    role: string,
+    hospitalId?: string,
+  ) {
+    try {
+      const existingProfile = await this.profilesService.findByUserId(userId);
+      if (existingProfile) {
+        return; // Profile already exists
+      }
+    } catch (error) {
+      // Profile doesn't exist, create it
+    }
+
+    // Create basic profile with just userId and role
+    await this.profilesService.create(userId, {
+      role,
+      ...(hospitalId && { hospitalId }),
+    });
   }
 
   // Generate JWT tokens

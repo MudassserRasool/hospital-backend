@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -19,16 +20,25 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { AuthService } from '../auth/auth.service';
+import { UpdateProfileDto as UpdateAuthDto } from '../auth/dto/update-auth.dto';
+import { CreateProfileDto } from '../profiles/dto/create-profile.dto';
+import { UpdateProfileDto } from '../profiles/dto/update-profile.dto';
+import { ProfilesService } from '../profiles/profiles.service';
+import { UsersService } from '../users/users.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
-import { PatientsService } from './patients.service';
 
 @ApiTags('Patients')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('patients')
 export class PatientsController {
-  constructor(private readonly patientsService: PatientsService) {}
+  constructor(
+    private readonly profilesService: ProfilesService,
+    private readonly usersService: UsersService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -37,7 +47,27 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Patient created successfully' })
   @ApiResponse({ status: 409, description: 'Patient already exists' })
   create(@Body() createPatientDto: CreatePatientDto) {
-    return this.patientsService.create(createPatientDto);
+    // Convert CreatePatientDto to CreateProfileDto
+    const createProfileDto: CreateProfileDto = {
+      role: 'patient',
+      dateOfBirth: createPatientDto.dateOfBirth
+        ? new Date(createPatientDto.dateOfBirth).toISOString()
+        : undefined,
+      gender: createPatientDto.gender,
+      bloodType: createPatientDto.bloodType,
+      allergies: createPatientDto.allergies,
+      chronicConditions: createPatientDto.chronicConditions,
+      emergencyContact: createPatientDto.emergencyContact,
+      medicalRecordNumber: createPatientDto.medicalRecordNumber,
+      insuranceProvider: createPatientDto.insuranceProvider,
+      insurancePolicyNumber: createPatientDto.insurancePolicyNumber,
+      hospitalId: createPatientDto.hospitalId,
+      phone: createPatientDto.phone,
+    };
+    return this.profilesService.create(
+      createPatientDto.userId,
+      createProfileDto,
+    );
   }
 
   @Get('me')
@@ -48,27 +78,80 @@ export class PatientsController {
     description: 'Patient profile retrieved successfully',
   })
   getMyProfile(@CurrentUser() user: any) {
-    return this.patientsService.findByUserId(user.id);
+    return this.profilesService.findByUserId(String(user.id));
   }
 
   @Patch('me')
   @Roles('patient')
   @ApiOperation({ summary: 'Update my patient profile' })
-  @ApiResponse({ status: 200, description: 'Patient profile updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Patient profile updated successfully',
+  })
   @ApiResponse({ status: 404, description: 'Patient not found' })
-  updateMyProfile(
+  async updateMyProfile(
     @CurrentUser() user: any,
     @Body() updatePatientDto: UpdatePatientDto,
   ) {
-    return this.patientsService.updateByUserId(user.id, updatePatientDto);
+    const userId = String(user.id);
+
+    // Separate user fields (firstName, lastName, profilePicture) from profile fields
+    const userUpdateDto: UpdateAuthDto = {};
+    if (updatePatientDto.firstName !== undefined) {
+      userUpdateDto.firstName = updatePatientDto.firstName;
+    }
+    if (updatePatientDto.lastName !== undefined) {
+      userUpdateDto.lastName = updatePatientDto.lastName;
+    }
+    if (updatePatientDto.profilePicture !== undefined) {
+      userUpdateDto.profilePicture = updatePatientDto.profilePicture;
+    }
+
+    // Update user fields if any
+    if (Object.keys(userUpdateDto).length > 0) {
+      await this.authService.updateProfile(userId, userUpdateDto);
+    }
+
+    // Convert UpdatePatientDto to UpdateProfileDto (profile fields only)
+    const updateProfileDto: UpdateProfileDto = {
+      dateOfBirth: updatePatientDto.dateOfBirth
+        ? new Date(updatePatientDto.dateOfBirth).toISOString()
+        : undefined,
+      gender: updatePatientDto.gender,
+      bloodType: updatePatientDto.bloodType,
+      allergies: updatePatientDto.allergies,
+      chronicConditions: updatePatientDto.chronicConditions,
+      emergencyContact: updatePatientDto.emergencyContact,
+      medicalRecordNumber: updatePatientDto.medicalRecordNumber,
+      insuranceProvider: updatePatientDto.insuranceProvider,
+      insurancePolicyNumber: updatePatientDto.insurancePolicyNumber,
+      hospitalId: updatePatientDto.hospitalId,
+      phone: updatePatientDto.phone,
+    };
+
+    // Update profile fields
+    const profile = await this.profilesService.updateByUserId(
+      userId,
+      updateProfileDto,
+    );
+
+    // Get updated user data
+    const updatedUser = await this.authService.getProfile(userId);
+
+    // Return combined data
+    const profileObj = profile.toObject ? profile.toObject() : profile;
+    return {
+      ...updatedUser,
+      ...profileObj,
+    };
   }
 
-  // Get paitent by phone number
+  // Get patient by phone number
   @Get('phone/:phone')
   @ApiOperation({ summary: 'Get patient by phone number' })
   @ApiResponse({ status: 200, description: 'Patient retrieved successfully' })
   getPatientByPhone(@Param('phone') phone: string) {
-    return this.patientsService.getPatientByPhone(phone);
+    return this.profilesService.findByPhone(phone);
   }
 
   @Get()
@@ -76,14 +159,16 @@ export class PatientsController {
   @ApiOperation({ summary: 'Get all patients' })
   @ApiResponse({ status: 200, description: 'Patients retrieved successfully' })
   findAll(@Query() filters: any) {
-    return this.patientsService.findAll(filters);
+    // Add role filter to only get patients
+    const query = { ...filters, role: 'patient' };
+    return this.profilesService.findAll(query);
   }
 
   @Get('user/:userId')
   @ApiOperation({ summary: 'Get patient by user ID' })
   @ApiResponse({ status: 200, description: 'Patient retrieved successfully' })
   findByUserId(@Param('userId') userId: string) {
-    return this.patientsService.findByUserId(userId);
+    return this.profilesService.findByUserId(userId);
   }
 
   @Get(':id')
@@ -91,7 +176,7 @@ export class PatientsController {
   @ApiResponse({ status: 200, description: 'Patient retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Patient not found' })
   findOne(@Param('id') id: string) {
-    return this.patientsService.findOne(id);
+    return this.profilesService.findOne(id);
   }
 
   @Get(':id/appointments')
@@ -101,7 +186,7 @@ export class PatientsController {
     description: 'Appointments retrieved successfully',
   })
   getAppointments(@Param('id') id: string) {
-    return this.patientsService.getPatientAppointments(id);
+    return this.profilesService.getPatientAppointments(id);
   }
 
   @Get(':id/medical-records')
@@ -112,7 +197,7 @@ export class PatientsController {
     description: 'Medical records retrieved successfully',
   })
   getMedicalRecords(@Param('id') id: string) {
-    return this.patientsService.getPatientMedicalRecords(id);
+    return this.profilesService.getPatientMedicalRecords(id);
   }
 
   @Get(':id/wallet')
@@ -120,7 +205,7 @@ export class PatientsController {
   @ApiOperation({ summary: 'Get patient wallet balance' })
   @ApiResponse({ status: 200, description: 'Wallet retrieved successfully' })
   getWallet(@Param('id') id: string) {
-    return this.patientsService.getPatientWallet(id);
+    return this.profilesService.getPatientWallet(id);
   }
 
   @Patch(':id')
@@ -129,31 +214,63 @@ export class PatientsController {
   @ApiResponse({ status: 200, description: 'Patient updated successfully' })
   @ApiResponse({ status: 404, description: 'Patient not found' })
   update(@Param('id') id: string, @Body() updatePatientDto: UpdatePatientDto) {
-    return this.patientsService.update(id, updatePatientDto);
+    // Convert UpdatePatientDto to UpdateProfileDto
+    const updateProfileDto: UpdateProfileDto = {
+      dateOfBirth: updatePatientDto.dateOfBirth
+        ? new Date(updatePatientDto.dateOfBirth).toISOString()
+        : undefined,
+      gender: updatePatientDto.gender,
+      bloodType: updatePatientDto.bloodType,
+      allergies: updatePatientDto.allergies,
+      chronicConditions: updatePatientDto.chronicConditions,
+      emergencyContact: updatePatientDto.emergencyContact,
+      medicalRecordNumber: updatePatientDto.medicalRecordNumber,
+      insuranceProvider: updatePatientDto.insuranceProvider,
+      insurancePolicyNumber: updatePatientDto.insurancePolicyNumber,
+      hospitalId: updatePatientDto.hospitalId,
+      phone: updatePatientDto.phone,
+    };
+    return this.profilesService.update(id, updateProfileDto);
   }
 
   @Patch(':id/block')
   @Roles('super_admin', 'owner', 'receptionist')
   @ApiOperation({ summary: 'Block patient with reason' })
   @ApiResponse({ status: 200, description: 'Patient blocked successfully' })
-  blockPatient(
+  async blockPatient(
     @Param('id') id: string,
     @Body('reason') reason: string,
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.blockPatient(id, reason, user.id);
+    // Get profile to find userId
+    const profile = await this.profilesService.findOne(id);
+    if (!profile) {
+      throw new NotFoundException('Patient profile not found');
+    }
+    // Block the user (blocking is in users collection)
+    return this.usersService.blockUser(
+      String(profile.userId),
+      reason,
+      String(user.id),
+    );
   }
 
   @Patch(':id/unblock')
   @Roles('super_admin', 'owner', 'receptionist')
   @ApiOperation({ summary: 'Unblock patient with reason' })
   @ApiResponse({ status: 200, description: 'Patient unblocked successfully' })
-  unblockPatient(
+  async unblockPatient(
     @Param('id') id: string,
-    @Body('reason') reason: string,
-    @CurrentUser() user: any,
+    @Body('reason') _reason: string,
+    @CurrentUser() _user: any,
   ) {
-    return this.patientsService.unblockPatient(id, reason, user.id);
+    // Get profile to find userId
+    const profile = await this.profilesService.findOne(id);
+    if (!profile) {
+      throw new NotFoundException('Patient profile not found');
+    }
+    // Unblock the user (blocking is in users collection)
+    return this.usersService.unblockUser(String(profile.userId));
   }
 
   @Delete(':id')
@@ -161,6 +278,6 @@ export class PatientsController {
   @ApiOperation({ summary: 'Delete patient' })
   @ApiResponse({ status: 200, description: 'Patient deleted successfully' })
   remove(@Param('id') id: string) {
-    return this.patientsService.remove(id);
+    return this.profilesService.remove(id);
   }
 }

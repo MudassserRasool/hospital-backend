@@ -10,8 +10,8 @@ import {
   Appointment,
   AppointmentDocument,
 } from '../appointments/entities/appointment.entity';
-import { Patient, PatientDocument } from '../patients/entities/patient.entity';
 import { ProfilesService } from '../profiles/profiles.service';
+import { UsersService } from '../users/users.service';
 import { Receipt, ReceiptDocument } from '../receipts/entities/receipt.entity';
 import { User, UserDocument } from '../users/entities/user.entity';
 
@@ -20,10 +20,10 @@ export class ReceptionService {
   constructor(
     @InjectModel(Appointment.name)
     private appointmentModel: Model<AppointmentDocument>,
-    @InjectModel(Patient.name) private patientModel: Model<PatientDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Receipt.name) private receiptModel: Model<ReceiptDocument>,
     private profilesService: ProfilesService,
+    private usersService: UsersService,
   ) {}
 
   // ========== APPOINTMENT MANAGEMENT ==========
@@ -200,7 +200,7 @@ export class ReceptionService {
   // ========== PATIENT MANAGEMENT ==========
 
   async getPatients(hospitalId: string, params?: any) {
-    const query: any = {};
+    const query: any = { role: 'patient', hospitalId };
 
     if (params?.search) {
       // Search in user's firstName, lastName, email
@@ -218,34 +218,42 @@ export class ReceptionService {
       query.userId = { $in: users.map((u) => u._id) };
     }
 
+    // Note: Blocking is now in users collection, so we filter users first
+    let userIds: any[] | null = null;
     if (params?.isBlocked !== undefined) {
-      query.isBlocked = params.isBlocked === 'true';
+      const blockedUsers = await this.userModel
+        .find({
+          role: 'patient',
+          isBlocked: params.isBlocked === 'true',
+        })
+        .select('_id')
+        .exec();
+      userIds = blockedUsers.map((u) => u._id);
+      if (query.userId && userIds) {
+        query.userId = { $in: userIds.filter((id) => (query.userId as any).$in.includes(id)) };
+      } else if (userIds) {
+        query.userId = { $in: userIds };
+      }
     }
 
-    const patients = await this.patientModel
-      .find(query)
-      .populate('userId', 'firstName lastName email phone profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(params?.limit || 50)
-      .skip(params?.skip || 0)
-      .exec();
+    const profiles = await this.profilesService.findAll(query);
+    
+    // Apply pagination manually since ProfilesService.findAll doesn't support it yet
+    const skip = params?.skip || 0;
+    const limit = params?.limit || 50;
+    const paginatedProfiles = profiles.slice(skip, skip + limit);
 
-    const total = await this.patientModel.countDocuments(query);
-
-    return { patients, total };
+    return { patients: paginatedProfiles, total: profiles.length };
   }
 
   async getPatientDetails(id: string) {
-    const patient = await this.patientModel
-      .findById(id)
-      .populate('userId', 'firstName lastName email phone profilePicture')
-      .exec();
+    const profile = await this.profilesService.findOne(id);
 
-    if (!patient) {
+    if (!profile || profile.role !== 'patient') {
       throw new NotFoundException('Patient not found');
     }
 
-    return patient;
+    return profile;
   }
 
   async createPatient(data: any, hospitalId: string) {
@@ -264,80 +272,57 @@ export class ReceptionService {
       isActive: true,
     });
 
-    // Create patient profile
-    const patient = await this.patientModel.create({
-      userId: user._id,
+    // Create patient profile using ProfilesService
+    const profile = await this.profilesService.create((user._id as any).toString(), {
+      role: 'patient',
       dateOfBirth: data.dateOfBirth,
       gender: data.gender,
       bloodType: data.bloodType,
       emergencyContact: data.emergencyContact,
+      hospitalId,
+      phone: data.phone,
     });
 
     return {
-      patient: patient.populate('userId'),
+      patient: profile,
       temporaryPassword: tempPassword,
     };
   }
 
   async updatePatient(id: string, data: any) {
-    const patient = await this.patientModel
-      .findByIdAndUpdate(id, data, { new: true })
-      .populate('userId')
-      .exec();
+    const profile = await this.profilesService.update(id, data);
 
-    if (!patient) {
+    if (!profile || profile.role !== 'patient') {
       throw new NotFoundException('Patient not found');
     }
 
-    return patient;
+    return profile;
   }
 
   async blockPatient(id: string, reason: string, blockedBy: string) {
-    const patient = await this.patientModel.findById(id);
+    const profile = await this.profilesService.findOne(id);
 
-    if (!patient) {
+    if (!profile || profile.role !== 'patient') {
       throw new NotFoundException('Patient not found');
     }
 
-    patient.isBlocked = true;
-    patient.blockReason = reason;
-    if (!patient.blockHistory) {
-      patient.blockHistory = [];
-    }
-    patient.blockHistory.push({
-      action: 'blocked',
+    // Block the user (blocking is in users collection)
+    return this.usersService.blockUser(
+      (profile.userId as any).toString(),
       reason,
-      by: blockedBy as any,
-      date: new Date(),
-    });
-
-    await patient.save();
-
-    return patient.populate('userId');
+      blockedBy,
+    );
   }
 
   async unblockPatient(id: string, reason: string, unblockedBy: string) {
-    const patient = await this.patientModel.findById(id);
+    const profile = await this.profilesService.findOne(id);
 
-    if (!patient) {
+    if (!profile || profile.role !== 'patient') {
       throw new NotFoundException('Patient not found');
     }
 
-    patient.isBlocked = false;
-    patient.blockReason = undefined;
-    if (!patient.blockHistory) {
-      patient.blockHistory = [];
-    }
-    patient.blockHistory.push({
-      action: 'unblocked',
-      reason,
-      by: unblockedBy as any,
-      date: new Date(),
-    });
-
-    await patient.save();
-
-    return patient.populate('userId');
+    // Unblock the user (blocking is in users collection)
+    return this.usersService.unblockUser((profile.userId as any).toString());
   }
 
   async getPatientHistory(id: string) {

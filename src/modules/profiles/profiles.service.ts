@@ -25,12 +25,24 @@ export class ProfilesService {
       throw new ConflictException('Profile already exists for this user');
     }
 
+    // Generate medical record number for patients if not provided
+    if (createProfileDto.role === 'patient' && !createProfileDto.medicalRecordNumber) {
+      createProfileDto.medicalRecordNumber = await this.generateMedicalRecordNumber();
+    }
+
     const profile = await this.profileModel.create({
       userId,
       ...createProfileDto,
+      // Initialize appointment stats for patients
+      ...(createProfileDto.role === 'patient' && {
+        totalAppointments: 0,
+        completedAppointments: 0,
+        cancelledAppointments: 0,
+        noShowAppointments: 0,
+      }),
     });
 
-    return profile;
+    return profile.populate('userId', 'firstName lastName email phone profilePicture');
   }
 
   /**
@@ -120,6 +132,34 @@ export class ProfilesService {
   }
 
   /**
+   * Find all profiles with filters (for patients, doctors, etc.)
+   */
+  async findAll(filters?: any) {
+    const query = filters || {};
+    const profiles = await this.profileModel
+      .find(query)
+      .populate('userId', 'firstName lastName email phone profilePicture')
+      .exec();
+    return profiles;
+  }
+
+  /**
+   * Find profile by phone number (for patients)
+   */
+  async findByPhone(phone: string) {
+    const profile = await this.profileModel
+      .findOne({ phone, role: 'patient' })
+      .populate('userId', 'firstName lastName email phone profilePicture')
+      .exec();
+
+    if (!profile) {
+      throw new NotFoundException('Profile not found');
+    }
+
+    return profile;
+  }
+
+  /**
    * Update appointment statistics (for patients)
    */
   async updateAppointmentStats(userId: string, stats: {
@@ -132,57 +172,55 @@ export class ProfilesService {
   }
 
   /**
-   * Block profile (for patients)
+   * Get patient appointments info (placeholder for appointments module integration)
    */
-  async blockProfile(userId: string, reason: string, blockedBy: string) {
-    const profile = await this.profileModel.findOne({ userId });
-
-    if (!profile) {
-      throw new NotFoundException('Profile not found');
-    }
-
-    profile.isBlocked = true;
-    profile.blockReason = reason;
-    if (!profile.blockHistory) {
-      profile.blockHistory = [];
-    }
-    profile.blockHistory.push({
-      action: 'blocked',
-      reason,
-      by: blockedBy as any,
-      date: new Date(),
-    });
-
-    await profile.save();
-
-    return profile.populate('userId', 'firstName lastName email phone');
+  async getPatientAppointments(profileId: string) {
+    const profile = await this.findOne(profileId);
+    return {
+      profileId,
+      totalAppointments: profile.totalAppointments || 0,
+      completedAppointments: profile.completedAppointments || 0,
+      cancelledAppointments: profile.cancelledAppointments || 0,
+      noShowAppointments: profile.noShowAppointments || 0,
+      message: 'Appointment details will be fetched from Appointments module',
+    };
   }
 
   /**
-   * Unblock profile (for patients)
+   * Get patient medical records info (placeholder for medical records module integration)
    */
-  async unblockProfile(userId: string, reason: string, unblockedBy: string) {
-    const profile = await this.profileModel.findOne({ userId });
+  async getPatientMedicalRecords(profileId: string) {
+    const profile = await this.findOne(profileId);
+    return {
+      profileId,
+      medicalRecordNumber: profile.medicalRecordNumber,
+      allergies: profile.allergies || [],
+      chronicConditions: profile.chronicConditions || [],
+      bloodType: profile.bloodType,
+      message: 'Full medical records will be fetched from Medical Records module',
+    };
+  }
 
-    if (!profile) {
-      throw new NotFoundException('Profile not found');
-    }
+  /**
+   * Get patient wallet info (placeholder for wallet module integration)
+   */
+  async getPatientWallet(profileId: string) {
+    return {
+      profileId,
+      message: 'Wallet details will be fetched from Wallet module',
+    };
+  }
 
-    profile.isBlocked = false;
-    profile.blockReason = undefined;
-    if (!profile.blockHistory) {
-      profile.blockHistory = [];
-    }
-    profile.blockHistory.push({
-      action: 'unblocked',
-      reason,
-      by: unblockedBy as any,
-      date: new Date(),
-    });
-
-    await profile.save();
-
-    return profile.populate('userId', 'firstName lastName email phone');
+  /**
+   * Generate medical record number for patients
+   */
+  private async generateMedicalRecordNumber(): Promise<string> {
+    const prefix = 'MRN';
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, '0');
+    return `${prefix}${timestamp}${random}`;
   }
 }
 

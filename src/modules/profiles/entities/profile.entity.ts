@@ -82,30 +82,7 @@ export class Profile {
   @Prop({ default: 0 })
   noShowAppointments?: number;
 
-  // Blocking fields (for patients)
-  @Prop({ default: false })
-  isBlocked?: boolean;
-
-  @Prop()
-  blockReason?: string;
-
-  @Prop({
-    type: [
-      {
-        action: String,
-        reason: String,
-        by: { type: Types.ObjectId, ref: 'User' },
-        date: Date,
-      },
-    ],
-    default: [],
-  })
-  blockHistory?: Array<{
-    action: string;
-    reason?: string;
-    by: Types.ObjectId;
-    date: Date;
-  }>;
+  // Note: Blocking is managed in users collection, not here
 
   // Hospital reference (for patients)
   @Prop({ type: Types.ObjectId, ref: 'Hospital' })
@@ -125,6 +102,6 @@ export const ProfileSchema = SchemaFactory.createForClass(Profile);
 ProfileSchema.index({ userId: 1 }, { unique: true });
 ProfileSchema.index({ role: 1 });
 ProfileSchema.index({ medicalRecordNumber: 1 });
-ProfileSchema.index({ isBlocked: 1 });
 ProfileSchema.index({ hospitalId: 1 });
+ProfileSchema.index({ phone: 1 }, { sparse: true }); // For patient phone lookup
 
